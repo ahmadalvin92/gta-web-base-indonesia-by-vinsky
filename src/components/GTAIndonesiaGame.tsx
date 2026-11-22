@@ -127,6 +127,42 @@ interface ExplosionItem {
 const STORAGE_CONTROL_KEY = "vinsky_gta_control_mode";
 const PORTFOLIO_URL = "https://vinsky-techfolio.vercel.app/";
 
+const JAKARTA_MISSIONS = [
+  {
+    id: "kurir_kopi",
+    title: "☕ Kurir Kopi Express",
+    desc: "Antar kopi Fore ke Kopi Kenangan Mantan SCBD",
+    targetX: -12,
+    targetZ: -62,
+    reward: 6000,
+  },
+  {
+    id: "jemput_mrt",
+    title: "🚕 Penumpang VIP MRT",
+    desc: "Antar penumpang dari MRT HI ke Rental PS5 Blok M",
+    targetX: 11,
+    targetZ: 112,
+    reward: 7500,
+  },
+  {
+    id: "kurir_ps5",
+    title: "🎮 Turnamen E-Sports PS5",
+    desc: "Kirim stik PS5 ke Rental PS5 & Warnet Vinsky 24H",
+    targetX: 11,
+    targetZ: 72,
+    reward: 8500,
+  },
+] as const;
+
+function getJakartaStreetName(x: number, z: number, regionTitle: string): string {
+  if (Math.hypot(x, z) < 38) return "📍 Bundaran HI • Monumen Selamat Datang";
+  if (Math.abs(z + 150) < 20) return "📍 Simpang Susun Semanggi / Flyover Tol";
+  if (Math.abs(x) < 22 && z < -25) return "📍 Jl. M.H. Thamrin • Koridor 1 Busway";
+  if (Math.abs(x) < 22 && z >= 25) return "📍 Jl. Jend. Sudirman • Kawasan Bisnis SCBD";
+  if (Math.abs(z) < 20) return "📍 Jl. Kebon Kacang – Jl. Imam Bonjol";
+  return `📍 ${regionTitle}`;
+}
+
 const CreatorLink: React.FC<{ className?: string }> = ({ className = "" }) => (
   <a
     href={PORTFOLIO_URL}
@@ -160,6 +196,9 @@ export default function GTAIndonesiaGame() {
   const [extraRadioChannels, setExtraRadioChannels] = useState<RadioChannel[]>([]);
   const [nearbyHangout, setNearbyHangout] = useState<HangoutSpotData | null>(null);
   const [activeCafeModal, setActiveCafeModal] = useState<HangoutSpotData | null>(null);
+  const [activeMissionIdx, setActiveMissionIdx] = useState<number | null>(null);
+  const [missionDistM, setMissionDistM] = useState(0);
+  const [streetNameLabel, setStreetNameLabel] = useState("📍 Jl. Jend. Sudirman • Bundaran HI");
 
   const [inVehicle, setInVehicle] = useState(true);
   const [cameraMode, setCameraMode] = useState<CameraViewMode>("chase");
@@ -302,6 +341,7 @@ export default function GTAIndonesiaGame() {
     cullableProps: THREE.Object3D[];
     raceCheckpoints: THREE.Vector3[];
     raceMarkerMesh: THREE.Mesh | null;
+    missionBeaconMesh: THREE.Mesh | null;
     aiRacers: Array<{ mesh: VehicleInstance; progress: number; speed: number }>;
     ojolBikes: VehicleInstance[];
   }>({
@@ -326,6 +366,7 @@ export default function GTAIndonesiaGame() {
     cullableProps: [],
     raceCheckpoints: [],
     raceMarkerMesh: null,
+    missionBeaconMesh: null,
     aiRacers: [],
     ojolBikes: [],
   });
@@ -374,6 +415,7 @@ export default function GTAIndonesiaGame() {
     raceActive: false,
     raceCheckpointIdx: 0,
     raceTimer: 0,
+    activeMissionIdx: null as number | null,
     lastTeloletAt: -99,
     lastPanicToastAt: -99,
   });
@@ -835,7 +877,7 @@ export default function GTAIndonesiaGame() {
   );
 
   const triggerTelolet = useCallback(() => {
-    soundEngine.playTeloletBasuri();
+    const basuriLabel = soundEngine.playTeloletBasuri();
     const nowSec = performance.now() * 0.001;
     const anchorX = simRef.current.inVehicle ? simRef.current.vehX : simRef.current.charX;
     const anchorZ = simRef.current.inVehicle ? simRef.current.vehZ : simRef.current.charZ;
@@ -850,10 +892,25 @@ export default function GTAIndonesiaGame() {
     if (cheeredCount > 0 && nowSec - simRef.current.lastTeloletAt > 3.5) {
       simRef.current.lastTeloletAt = nowSec;
       setCash((c) => c + 150);
-      showToast("🎺 OM TELOLET OM!! Warga Sudirman kegirangan (+$150 tip)!");
+      showToast(`🎺 ${basuriLabel}: OM TELOLET OM!! Warga senang (+$150)!`);
     } else {
-      showToast("🎺 KLAKSON TELOLET BASURI V3!");
+      showToast(`🎺 ${basuriLabel}!`);
     }
+  }, [showToast]);
+
+  const startOrCycleMission = useCallback(() => {
+    const cur = simRef.current.activeMissionIdx;
+    const nextIdx = cur === null ? 0 : (cur + 1) % JAKARTA_MISSIONS.length;
+    simRef.current.activeMissionIdx = nextIdx;
+    setActiveMissionIdx(nextIdx);
+    const m = JAKARTA_MISSIONS[nextIdx];
+    const beacon = engineRefs.current.missionBeaconMesh;
+    if (beacon) {
+      beacon.position.set(m.targetX, 7.5, m.targetZ);
+      beacon.visible = true;
+    }
+    soundEngine.playCashReward();
+    showToast(`📋 MISI BARU: ${m.title} — ${m.desc} (+$${m.reward.toLocaleString("id-ID")})`);
   }, [showToast]);
 
   const handleStartGame = useCallback(async () => {
@@ -1134,6 +1191,19 @@ export default function GTAIndonesiaGame() {
     engineRefs.current.character = character;
     engineRefs.current.dancer = dancer;
     engineRefs.current.pedestrians = pedestrians;
+
+    const missionBeacon = new THREE.Mesh(
+      new THREE.CylinderGeometry(4.2, 4.2, 15, 22, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: 0x00f0ff,
+        transparent: true,
+        opacity: 0.42,
+        side: THREE.DoubleSide,
+      })
+    );
+    missionBeacon.visible = false;
+    scene.add(missionBeacon);
+    engineRefs.current.missionBeaconMesh = missionBeacon;
 
     buildCityWorld(
       engineRefs.current.layout,
@@ -1806,6 +1876,9 @@ export default function GTAIndonesiaGame() {
           setHealthPct(Math.round(s.health));
           setArmorPct(Math.round(s.armor));
           setGps(worldToGps(anchorX, anchorZ, engineRefs.current.layout.region));
+          setStreetNameLabel(
+            getJakartaStreetName(anchorX, anchorZ, engineRefs.current.layout.region.title)
+          );
 
           let closestSpot: HangoutSpotData | null = null;
           let bestSpotDist = 14.5;
@@ -1817,6 +1890,31 @@ export default function GTAIndonesiaGame() {
             }
           }
           setNearbyHangout(closestSpot);
+
+          let activeMissionCoord: { x: number; z: number } | null = null;
+          if (s.activeMissionIdx !== null) {
+            const m = JAKARTA_MISSIONS[s.activeMissionIdx];
+            if (m) {
+              const distM = Math.hypot(anchorX - m.targetX, anchorZ - m.targetZ);
+              setMissionDistM(Math.round(distM));
+              activeMissionCoord = { x: m.targetX, z: m.targetZ };
+              if (engineRefs.current.missionBeaconMesh) {
+                engineRefs.current.missionBeaconMesh.rotation.y += 0.25;
+              }
+              if (distM < 12) {
+                soundEngine.playCashReward();
+                setCash((c) => c + m.reward);
+                s.nitro = 100;
+                setNitroPct(100);
+                s.activeMissionIdx = null;
+                setActiveMissionIdx(null);
+                if (engineRefs.current.missionBeaconMesh) {
+                  engineRefs.current.missionBeaconMesh.visible = false;
+                }
+                showToast(`🎉 MISI SELESAI (${m.title})! +$${m.reward.toLocaleString("id-ID")} & Nitro 100%!`);
+              }
+            }
+          }
 
           const activeCp = s.raceActive
             ? engineRefs.current.raceCheckpoints[s.raceCheckpointIdx]
@@ -1832,7 +1930,7 @@ export default function GTAIndonesiaGame() {
             police: engineRefs.current.policePool
               .filter((p) => p.mesh.group.visible)
               .map((p) => ({ x: p.x, z: p.z })),
-            raceTarget: activeCp ? { x: activeCp.x, z: activeCp.z } : null,
+            raceTarget: activeCp ? { x: activeCp.x, z: activeCp.z } : activeMissionCoord,
           });
 
           if (s.raceActive) {
@@ -1867,6 +1965,8 @@ export default function GTAIndonesiaGame() {
       bulletMat.dispose();
       expGeo.dispose();
       expMat.dispose();
+      missionBeacon.geometry.dispose();
+      (missionBeacon.material as THREE.Material).dispose();
       rainGeo.dispose();
       rainMat.dispose();
       envTex.dispose();
@@ -1924,6 +2024,10 @@ export default function GTAIndonesiaGame() {
       }
       if (e.code === "KeyH") {
         triggerTelolet();
+        return;
+      }
+      if (e.code === "KeyM") {
+        startOrCycleMission();
         return;
       }
       if (e.code === "KeyG") {
@@ -1992,7 +2096,15 @@ export default function GTAIndonesiaGame() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [stage, howToPlayOpen, toggleEnterExitVehicle, triggerTelolet, enterHangoutSpot, showToast]);
+  }, [
+    stage,
+    howToPlayOpen,
+    toggleEnterExitVehicle,
+    triggerTelolet,
+    enterHangoutSpot,
+    startOrCycleMission,
+    showToast,
+  ]);
 
   const handleJoystickStart = (e: React.TouchEvent<HTMLDivElement>) => {
     const t = e.touches[0];
@@ -2341,6 +2453,15 @@ export default function GTAIndonesiaGame() {
             </button>
 
             <button
+              onClick={startOrCycleMission}
+              className="flex items-center gap-1 rounded-xl border border-cyan-400/50 bg-cyan-950/85 px-2.5 py-1.5 text-[11px] font-bold text-cyan-200 hover:bg-cyan-500/30 backdrop-blur-md"
+              title="Mulai / Ganti Misi Warga Jakarta (Key M)"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Misi</span>
+            </button>
+
+            <button
               onClick={() => setHowToPlayOpen(true)}
               className="rounded-xl border border-amber-400/50 bg-slate-950/80 p-1.5 text-amber-300 hover:bg-amber-500/30 backdrop-blur-md"
               title="Panduan Main & Fitur"
@@ -2401,6 +2522,16 @@ export default function GTAIndonesiaGame() {
               CP {raceStatus.checkpoint}/{raceStatus.total} • {raceStatus.timeSec.toFixed(1)}s
             </div>
           )}
+
+          {activeMissionIdx !== null && (
+            <div className="inline-flex w-fit max-w-[325px] items-center gap-1.5 rounded-xl border border-cyan-400/60 bg-cyan-950/85 px-2.5 py-1 text-[11px] font-bold text-cyan-100 backdrop-blur-md shadow">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+              <span className="truncate">
+                {JAKARTA_MISSIONS[activeMissionIdx]?.title} • {missionDistM}m (+$
+                {JAKARTA_MISSIONS[activeMissionIdx]?.reward.toLocaleString("id-ID")})
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="pointer-events-auto flex flex-col items-end gap-1.5">
@@ -2425,12 +2556,15 @@ export default function GTAIndonesiaGame() {
         </div>
       </div>
 
-      {/* Circular Rotating Radar Minimap */}
+      {/* Circular Rotating Radar Minimap + Street Name Ticker */}
       <div
-        className={`pointer-events-none fixed z-20 ${
+        className={`pointer-events-none fixed z-20 flex flex-col items-start gap-1 ${
           resolvedMobile ? "bottom-36 left-4" : "bottom-4 left-4"
         }`}
       >
+        <div className="rounded-lg border border-white/15 bg-slate-950/80 px-2.5 py-0.5 text-[10px] font-bold text-cyan-200 backdrop-blur-md shadow">
+          {streetNameLabel}
+        </div>
         <GTASanAndreasRadar
           playerX={radarState.x}
           playerZ={radarState.z}

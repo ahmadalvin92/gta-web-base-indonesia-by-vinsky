@@ -319,13 +319,24 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
   const [searchError, setSearchError] = useState("");
   const [volume, setVolume] = useState(0.55);
   const [bars, setBars] = useState<number[]>([25, 60, 40, 80, 35, 70, 50, 30]);
+  const [trackTime, setTrackTime] = useState(0);
+  const [trackDur, setTrackDur] = useState(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const playTokenRef = useRef(0);
+  const wantPlayingRef = useRef(autoPlayOnMount);
   const autoStartedRef = useRef(false);
 
   const safeIdx = ((channelIndex % channels.length) + channels.length) % channels.length;
   const activeChannel = channels[safeIdx] ?? channels[0];
+
+  const formatAudioTime = (sec: number) => {
+    if (!Number.isFinite(sec) || sec <= 0) return "0:00";
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
 
   // Equalizer visualizer
   useEffect(() => {
@@ -347,63 +358,104 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
     }
   }, [volume, muted]);
 
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.loop = !autoNext;
+    }
+  }, [autoNext]);
+
   const playSource = useCallback(
-    (url: string, fallbackMode: boolean, loopOverride?: boolean) => {
+    (channel: RadioChannel, fallbackMode: boolean) => {
       if (!enableAudio) return;
       const audio = audioRef.current;
       if (!audio) return;
+
+      const token = ++playTokenRef.current;
+      const url = fallbackMode ? channel.fallbackUrl : channel.streamUrl;
+      const resolvedUrl =
+        typeof window !== "undefined" ? new URL(url, window.location.href).href : url;
+
+      wantPlayingRef.current = true;
       setUsingFallback(fallbackMode);
-      audio.src = url;
-      const isWav = url.endsWith(".wav");
-      audio.loop = loopOverride ?? (isWav && !autoNext);
+
+      if (audio.src !== resolvedUrl) {
+        audio.src = url;
+        audio.load();
+        setTrackTime(0);
+        setTrackDur(0);
+      }
+
+      audio.loop = !autoNext;
       audio.volume = muted ? 0 : volume;
+
       audio
         .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => {
-          if (!fallbackMode && activeChannel.fallbackUrl !== url) {
-            playSource(activeChannel.fallbackUrl, true, !autoNext);
+        .then(() => {
+          if (token !== playTokenRef.current) return;
+          setIsPlaying(true);
+        })
+        .catch((err) => {
+          if (token !== playTokenRef.current) return;
+          if (err && err.name === "AbortError") return;
+          if (err && err.name === "NotAllowedError") {
+            setIsPlaying(false);
+            return;
+          }
+          if (!fallbackMode && channel.fallbackUrl !== url) {
+            playSource(channel, true);
           } else {
             setIsPlaying(false);
           }
         });
     },
-    [activeChannel.fallbackUrl, activeChannel.isTrack, autoNext, enableAudio, muted, volume]
+    [autoNext, enableAudio, muted, volume]
   );
 
-  // Switch track automatically when channelIndex changes
+  // Switch track cleanly in a single place whenever channelIndex changes
   useEffect(() => {
     if (!enableAudio) return;
-    if (isPlaying || autoStartedRef.current) {
-      playSource(activeChannel.streamUrl, false);
+    if (wantPlayingRef.current || isPlaying) {
+      playSource(activeChannel, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [safeIdx]);
+  }, [safeIdx, enableAudio]);
 
-  // Auto-play music when entering the city so Jakarta never feels silent!
+  // Auto-play music when entering the city + playback watchdog so audio never drops silently
   useEffect(() => {
-    if (!enableAudio || !autoPlayOnMount || autoStartedRef.current) return;
-    autoStartedRef.current = true;
-    const tryStart = () => {
-      playSource(activeChannel.streamUrl, false);
-    };
-    const timer = setTimeout(tryStart, 350);
+    if (!enableAudio) return;
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (autoPlayOnMount && !autoStartedRef.current) {
+      autoStartedRef.current = true;
+      wantPlayingRef.current = true;
+      timer = setTimeout(() => {
+        playSource(activeChannel, false);
+      }, 280);
+    }
 
     const resumeOnGesture = () => {
-      if (audioRef.current && audioRef.current.paused) {
+      if (wantPlayingRef.current && audioRef.current && audioRef.current.paused) {
         audioRef.current
           .play()
           .then(() => setIsPlaying(true))
           .catch(() => {});
       }
-      window.removeEventListener("pointerdown", resumeOnGesture);
-      window.removeEventListener("keydown", resumeOnGesture);
     };
     window.addEventListener("pointerdown", resumeOnGesture, { once: true });
     window.addEventListener("keydown", resumeOnGesture, { once: true });
 
+    const watchdog = setInterval(() => {
+      const a = audioRef.current;
+      if (a && wantPlayingRef.current && a.paused && !a.ended && a.readyState >= 2) {
+        a.play()
+          .then(() => setIsPlaying(true))
+          .catch(() => {});
+      }
+    }, 2000);
+
     return () => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
+      clearInterval(watchdog);
       window.removeEventListener("pointerdown", resumeOnGesture);
       window.removeEventListener("keydown", resumeOnGesture);
     };
@@ -415,35 +467,40 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
     const audio = audioRef.current;
     if (!audio) return;
     if (isPlaying) {
+      wantPlayingRef.current = false;
       audio.pause();
       setIsPlaying(false);
     } else {
-      playSource(activeChannel.streamUrl, false);
+      wantPlayingRef.current = true;
+      if (audio.src) {
+        audio
+          .play()
+          .then(() => setIsPlaying(true))
+          .catch(() => playSource(activeChannel, false));
+      } else {
+        playSource(activeChannel, false);
+      }
     }
   };
 
   const handlePrev = () => {
-    onChangeChannelIndex((safeIdx - 1 + channels.length) % channels.length);
-    if (enableAudio && !isPlaying) {
-      setTimeout(() => playSource(channels[(safeIdx - 1 + channels.length) % channels.length].streamUrl, false), 40);
-    }
+    wantPlayingRef.current = true;
+    const prevIdx = (safeIdx - 1 + channels.length) % channels.length;
+    onChangeChannelIndex(prevIdx);
   };
 
   const handleNext = useCallback(() => {
+    wantPlayingRef.current = true;
     const nextIdx = (safeIdx + 1) % channels.length;
     onChangeChannelIndex(nextIdx);
-    if (enableAudio) {
-      setTimeout(() => playSource(channels[nextIdx].streamUrl, false), 40);
-    }
-  }, [channels, enableAudio, onChangeChannelIndex, playSource, safeIdx]);
+  }, [channels.length, onChangeChannelIndex, safeIdx]);
 
   const handleSelectChannel = (idx: number) => {
-    onChangeChannelIndex(idx);
-    if (enableAudio) {
-      setTimeout(() => {
-        const ch = channels[idx];
-        if (ch) playSource(ch.streamUrl, false);
-      }, 30);
+    wantPlayingRef.current = true;
+    if (idx === safeIdx) {
+      playSource(channels[idx], false);
+    } else {
+      onChangeChannelIndex(idx);
     }
   };
 
@@ -462,6 +519,7 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
       isTrack: true,
     }));
 
+    wantPlayingRef.current = true;
     const targetIdx = channels.length;
     if (onAddChannels) {
       onAddChannels(uploaded);
@@ -469,9 +527,6 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
       setLocalExtras((prev) => [...prev, ...uploaded]);
     }
     onChangeChannelIndex(targetIdx);
-    if (enableAudio) {
-      setTimeout(() => playSource(uploaded[0].streamUrl, false), 80);
-    }
   };
 
   const handleSearchSongs = async (e: React.FormEvent) => {
@@ -512,6 +567,7 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
       if (found.length === 0) {
         setSearchError("Lagu tidak ditemukan, coba kata kunci lain atau Upload MP3.");
       } else {
+        wantPlayingRef.current = true;
         const startIdx = channels.length;
         if (onAddChannels) {
           onAddChannels(found);
@@ -519,9 +575,6 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
           setLocalExtras((prev) => [...prev, ...found]);
         }
         onChangeChannelIndex(startIdx);
-        if (enableAudio) {
-          setTimeout(() => playSource(found[0].streamUrl, false), 80);
-        }
       }
     } catch {
       setSearchError("Koneksi pencarian gagal, pakai daftar lagu lokal/tersedia.");
@@ -539,7 +592,16 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
       {enableAudio && (
         <audio
           ref={audioRef}
+          preload="auto"
+          onLoadedMetadata={(e) => {
+            const d = e.currentTarget.duration;
+            setTrackDur(Number.isFinite(d) ? d : 0);
+          }}
+          onTimeUpdate={(e) => {
+            setTrackTime(e.currentTarget.currentTime);
+          }}
           onEnded={() => {
+            if (!wantPlayingRef.current) return;
             if (autoNext) {
               handleNext();
             } else if (audioRef.current) {
@@ -548,8 +610,8 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
             }
           }}
           onError={() => {
-            if (!usingFallback && audioRef.current) {
-              playSource(activeChannel.fallbackUrl, true, false);
+            if (enableAudio && wantPlayingRef.current && !usingFallback) {
+              playSource(activeChannel, true);
             }
           }}
         />
@@ -575,6 +637,21 @@ export const JakartaRadioHUD: React.FC<JakartaRadioHUDProps> = ({
           <p className="truncate text-xs font-bold text-white mt-0.5" title={activeChannel.name}>
             {activeChannel.name}
           </p>
+          {enableAudio && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/15">
+                <div
+                  className="h-full bg-gradient-to-r from-pink-500 to-cyan-400 transition-all duration-200"
+                  style={{
+                    width: trackDur > 0 ? `${Math.min(100, (trackTime / trackDur) * 100)}%` : isPlaying ? "100%" : "0%",
+                  }}
+                />
+              </div>
+              <span className="text-[9px] font-mono text-slate-300 shrink-0">
+                {trackDur > 0 ? `${formatAudioTime(trackTime)} / ${formatAudioTime(trackDur)}` : "LIVE"}
+              </span>
+            </div>
+          )}
           {!compact && (
             <p className="truncate text-[11px] text-slate-400">
               {activeChannel.genre}

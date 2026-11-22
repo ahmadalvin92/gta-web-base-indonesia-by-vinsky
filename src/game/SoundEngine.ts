@@ -10,6 +10,7 @@ class SoundEngine {
   private sirenGain: GainNode | null = null;
   private muted = false;
   private teloletPlaying = false;
+  private basuriVariant = 0;
 
   private ensureContext(): AudioContext | null {
     if (typeof window === "undefined") return null;
@@ -101,23 +102,57 @@ class SoundEngine {
     this.sirenGain.gain.setTargetAtTime(0.035, ctx.currentTime, 0.05);
   }
 
-  public playTeloletBasuri(): void {
-    if (this.muted || this.teloletPlaying) return;
+  public playTeloletBasuri(): string {
+    const melodies = [
+      {
+        label: "Basuri V1 • Mengular Sudirman",
+        notes: [
+          { f: 523.25, d: 0.13 },
+          { f: 587.33, d: 0.13 },
+          { f: 659.25, d: 0.15 },
+          { f: 523.25, d: 0.13 },
+          { f: 659.25, d: 0.15 },
+          { f: 783.99, d: 0.2 },
+          { f: 659.25, d: 0.15 },
+          { f: 523.25, d: 0.26 },
+        ],
+      },
+      {
+        label: "Basuri V2 • Kincir-Kincir Betawi",
+        notes: [
+          { f: 587.33, d: 0.14 },
+          { f: 659.25, d: 0.14 },
+          { f: 783.99, d: 0.14 },
+          { f: 880.0, d: 0.18 },
+          { f: 783.99, d: 0.14 },
+          { f: 659.25, d: 0.14 },
+          { f: 587.33, d: 0.24 },
+        ],
+      },
+      {
+        label: "Basuri V3 • Karnaval TransJakarta",
+        notes: [
+          { f: 659.25, d: 0.11 },
+          { f: 659.25, d: 0.11 },
+          { f: 783.99, d: 0.15 },
+          { f: 880.0, d: 0.15 },
+          { f: 783.99, d: 0.12 },
+          { f: 659.25, d: 0.12 },
+          { f: 587.33, d: 0.14 },
+          { f: 523.25, d: 0.26 },
+        ],
+      },
+    ];
+
+    const chosen = melodies[this.basuriVariant % melodies.length];
+    this.basuriVariant += 1;
+
+    if (this.muted || this.teloletPlaying) return chosen.label;
     const ctx = this.ensureContext();
-    if (!ctx) return;
+    if (!ctx) return chosen.label;
 
     this.teloletPlaying = true;
-    // Authentic Indonesian Basuri Telolet melody notes (Hz)
-    const melody = [
-      { f: 523.25, d: 0.14 }, // C5
-      { f: 587.33, d: 0.14 }, // D5
-      { f: 659.25, d: 0.16 }, // E5
-      { f: 523.25, d: 0.14 }, // C5
-      { f: 659.25, d: 0.16 }, // E5
-      { f: 783.99, d: 0.22 }, // G5
-      { f: 659.25, d: 0.16 }, // E5
-      { f: 523.25, d: 0.28 }, // C5
-    ];
+    const melody = chosen.notes;
 
     let offset = ctx.currentTime + 0.02;
     melody.forEach((note) => {
@@ -153,6 +188,8 @@ class SoundEngine {
     setTimeout(() => {
       this.teloletPlaying = false;
     }, 1500);
+
+    return chosen.label;
   }
 
   public playGunshot(): void {
