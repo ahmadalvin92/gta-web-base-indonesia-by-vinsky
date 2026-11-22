@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 7, 8, 15;
+  --background-end-rgb: 14, 16, 30;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #07080f;
+  color: rgb(var(--foreground-rgb));
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* Custom sleek scrollbar for menus & smartphone HUD */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 62, 157, 0.5);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 140, 56, 0.8);
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(255, 62, 157, 0.4), 0 0 30px rgba(255, 140, 56, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 62, 157, 0.75), 0 0 50px rgba(255, 140, 56, 0.45);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.4s ease-in-out infinite;
+}
