@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader, DRACOLoader } from "three-stdlib";
+import { GLTFLoader, DRACOLoader, SkeletonUtils } from "three-stdlib";
 import { getLicensePlateTexture } from "./IndonesianTextureGenerator";
 
 export type VehicleKind =
@@ -26,12 +26,12 @@ export interface VehicleSpec {
   name: string;
   category: "Mobil Rakyat & CDID" | "Eropa & Sport" | "Dinas & Umum" | "Udara & Laut";
   glbPath?: string;
+  glbYawOffset?: number;
   defaultColor: string;
   defaultPlate: string;
   maxSpeedKmh: number;
   acceleration: number;
   handling: number;
-  silhouette: "mpv" | "sedan" | "supercar" | "bus" | "motor" | "jet" | "boat";
   isAircraft?: boolean;
   isBoat?: boolean;
   hasTelolet?: boolean;
@@ -46,25 +46,25 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     name: "Toyota Avanza / Veloz",
     category: "Mobil Rakyat & CDID",
     glbPath: "/models/cars/avanza.glb",
+    glbYawOffset: 0,
     defaultColor: "#e2e8f0",
     defaultPlate: "B 2026 VIN",
     maxSpeedKmh: 195,
     acceleration: 30,
     handling: 2.75,
-    silhouette: "mpv",
-    targetDims: { length: 4.42, width: 1.82, height: 1.66 },
+    targetDims: { length: 4.45, width: 1.84, height: 1.66 },
   },
   {
     id: "innova",
     name: "Kijang Innova Zenix / Reborn",
     category: "Mobil Rakyat & CDID",
     glbPath: "/models/cars/innova.glb",
+    glbYawOffset: 0,
     defaultColor: "#1e293b",
     defaultPlate: "B 1089 RFS",
     maxSpeedKmh: 215,
     acceleration: 34,
     handling: 2.68,
-    silhouette: "mpv",
     targetDims: { length: 4.72, width: 1.88, height: 1.72 },
   },
   {
@@ -72,25 +72,25 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     name: "Mercedes-Benz C/E-Class",
     category: "Eropa & Sport",
     glbPath: "/models/cars/mercy.glb",
+    glbYawOffset: 0,
     defaultColor: "#cbd5e1",
     defaultPlate: "B 777 MBY",
     maxSpeedKmh: 280,
     acceleration: 44,
     handling: 3.05,
-    silhouette: "sedan",
-    targetDims: { length: 4.68, width: 1.88, height: 1.42 },
+    targetDims: { length: 4.65, width: 1.88, height: 1.42 },
   },
   {
     id: "bmw",
     name: "BMW M4 / 3-Series",
     category: "Eropa & Sport",
     glbPath: "/models/cars/bmw.glb",
+    glbYawOffset: 0,
     defaultColor: "#1d4ed8",
     defaultPlate: "B 444 BMW",
     maxSpeedKmh: 305,
     acceleration: 48,
     handling: 3.15,
-    silhouette: "sedan",
     targetDims: { length: 4.62, width: 1.9, height: 1.38 },
   },
   {
@@ -98,25 +98,25 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     name: "Honda Civic Type-R JDM",
     category: "Mobil Rakyat & CDID",
     glbPath: "/models/cars/civic.glb",
+    glbYawOffset: 0,
     defaultColor: "#f8fafc",
     defaultPlate: "B 1945 JDM",
     maxSpeedKmh: 278,
     acceleration: 43,
     handling: 3.12,
-    silhouette: "sedan",
     targetDims: { length: 4.55, width: 1.88, height: 1.4 },
   },
   {
     id: "supercar",
-    name: "Vinsky Hyperion V12",
+    name: "Ferrari 458 / Hyperion V12",
     category: "Eropa & Sport",
     glbPath: "/models/cars/supercar.glb",
-    defaultColor: "#ff5500",
+    glbYawOffset: Math.PI, // Three.js ferrari.glb natively faces -Z
+    defaultColor: "#dc2626",
     defaultPlate: "B 1 VKY",
     maxSpeedKmh: 355,
     acceleration: 56,
     handling: 3.2,
-    silhouette: "supercar",
     targetDims: { length: 4.55, width: 1.96, height: 1.24 },
   },
   {
@@ -124,36 +124,38 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     name: "Griffin GT Coupe",
     category: "Eropa & Sport",
     glbPath: "/models/cars/sport.glb",
+    glbYawOffset: 0,
     defaultColor: "#e11d48",
     defaultPlate: "B 888 AAG",
     maxSpeedKmh: 310,
     acceleration: 47,
     handling: 3.05,
-    silhouette: "supercar",
-    targetDims: { length: 4.48, width: 1.92, height: 1.3 },
+    targetDims: { length: 4.48, width: 1.92, height: 1.32 },
   },
   {
     id: "hatchback",
     name: "JDM Hatchback Modif",
     category: "Mobil Rakyat & CDID",
+    glbPath: "/models/cars/hatchback.glb",
+    glbYawOffset: 0,
     defaultColor: "#facc15",
     defaultPlate: "B 1212 YRS",
     maxSpeedKmh: 235,
     acceleration: 36,
     handling: 3.2,
-    silhouette: "mpv",
-    targetDims: { length: 4.15, width: 1.82, height: 1.46 },
+    targetDims: { length: 4.18, width: 1.82, height: 1.46 },
   },
   {
     id: "sedan",
     name: "Sedan Executive JKT",
     category: "Mobil Rakyat & CDID",
+    glbPath: "/models/cars/sedan.glb",
+    glbYawOffset: 0,
     defaultColor: "#0f172a",
     defaultPlate: "B 2025 IDR",
     maxSpeedKmh: 265,
     acceleration: 40,
     handling: 3.0,
-    silhouette: "sedan",
     targetDims: { length: 4.52, width: 1.88, height: 1.4 },
   },
   {
@@ -161,39 +163,39 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     name: "SUV Fortuner / Pajero",
     category: "Mobil Rakyat & CDID",
     glbPath: "/models/cars/suv.glb",
+    glbYawOffset: 0,
     defaultColor: "#111827",
     defaultPlate: "B 999 VNZ",
     maxSpeedKmh: 225,
     acceleration: 33,
     handling: 2.6,
-    silhouette: "mpv",
-    targetDims: { length: 4.78, width: 1.92, height: 1.76 },
+    targetDims: { length: 4.78, width: 1.92, height: 1.74 },
   },
   {
     id: "bluebird",
     name: "Taksi Bluebird Jakarta",
     category: "Dinas & Umum",
     glbPath: "/models/cars/bluebird.glb",
+    glbYawOffset: 0,
     defaultColor: "#38bdf8",
     defaultPlate: "B 2889 DR",
     maxSpeedKmh: 195,
     acceleration: 30,
     handling: 2.8,
-    silhouette: "mpv",
     isTaxi: true,
-    targetDims: { length: 4.45, width: 1.82, height: 1.56 },
+    targetDims: { length: 4.45, width: 1.82, height: 1.54 },
   },
   {
     id: "bus_transjakarta",
     name: "Bus TransJakarta Telolet",
     category: "Dinas & Umum",
     glbPath: "/models/cars/transjakarta.glb",
+    glbYawOffset: 0,
     defaultColor: "#0284c7",
     defaultPlate: "B 7123 TJ",
     maxSpeedKmh: 145,
     acceleration: 20,
     handling: 1.9,
-    silhouette: "bus",
     hasTelolet: true,
     targetDims: { length: 9.8, width: 2.45, height: 3.05 },
   },
@@ -202,12 +204,12 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     name: "Mobil Polisi PJR Korlantas",
     category: "Dinas & Umum",
     glbPath: "/models/cars/police.glb",
+    glbYawOffset: 0,
     defaultColor: "#ffffff",
     defaultPlate: "VII 1204-00",
     maxSpeedKmh: 275,
     acceleration: 44,
     handling: 2.95,
-    silhouette: "sedan",
     isPolice: true,
     targetDims: { length: 4.55, width: 1.9, height: 1.44 },
   },
@@ -216,25 +218,24 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     name: "Angkot Mikrolet Biru",
     category: "Dinas & Umum",
     glbPath: "/models/cars/angkot.glb",
+    glbYawOffset: 0,
     defaultColor: "#06b6d4",
     defaultPlate: "B 1452 WK",
     maxSpeedKmh: 155,
     acceleration: 24,
     handling: 2.45,
-    silhouette: "mpv",
     hasTelolet: true,
-    targetDims: { length: 4.18, width: 1.76, height: 1.82 },
+    targetDims: { length: 4.18, width: 1.78, height: 1.82 },
   },
   {
     id: "motor",
-    name: "Motor Matic / Sport JKT",
+    name: "Motor Sport / Skuter JKT",
     category: "Dinas & Umum",
     defaultColor: "#111827",
     defaultPlate: "B 4510 VKY",
     maxSpeedKmh: 175,
     acceleration: 42,
     handling: 3.5,
-    silhouette: "motor",
     targetDims: { length: 2.05, width: 0.78, height: 1.15 },
   },
   {
@@ -246,7 +247,6 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     maxSpeedKmh: 520,
     acceleration: 68,
     handling: 2.2,
-    silhouette: "jet",
     isAircraft: true,
     targetDims: { length: 9.6, width: 8.8, height: 2.8 },
   },
@@ -259,11 +259,126 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     maxSpeedKmh: 185,
     acceleration: 35,
     handling: 2.6,
-    silhouette: "boat",
     isBoat: true,
     targetDims: { length: 6.2, width: 2.2, height: 1.35 },
   },
 ];
+
+export const CITY_ASSET_FILES = [
+  "predio_alto.glb",
+  "predio_apartamentos.glb",
+  "escritorio.glb",
+  "hotel.glb",
+  "banco.glb",
+  "shopping.glb",
+  "mercado.glb",
+  "restaurante.glb",
+  "loja_esquina.glb",
+  "oficina.glb",
+  "posto_recarga.glb",
+  "policia.glb",
+  "hospital.glb",
+  "monumento.glb",
+  "ponto_onibus.glb",
+  "semaforo.glb",
+  "poste_luz.glb",
+  "ponte.glb",
+  "buriti.glb",
+  "ipe_amarelo.glb",
+  "building-small-a.glb",
+  "building-small-b.glb",
+  "building-small-c.glb",
+  "building-small-d.glb",
+  "building-garage.glb",
+  "pavement-fountain.glb",
+  "grass-trees.glb",
+  "grass-trees-tall.glb",
+];
+
+interface CachedGLTFData {
+  scene: THREE.Group;
+  animations: THREE.AnimationClip[];
+}
+
+let sharedGLTFLoader: GLTFLoader | null = null;
+const gltfCache = new Map<string, CachedGLTFData>();
+
+function getGLTFLoader(): GLTFLoader {
+  if (!sharedGLTFLoader) {
+    sharedGLTFLoader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath(
+      "https://www.gstatic.com/draco/versioned/decoders/1.5.7/"
+    );
+    sharedGLTFLoader.setDRACOLoader(dracoLoader);
+  }
+  return sharedGLTFLoader;
+}
+
+async function loadGLTFUrl(url: string): Promise<CachedGLTFData | null> {
+  if (gltfCache.has(url)) return gltfCache.get(url)!;
+  try {
+    const loader = getGLTFLoader();
+    const gltf = await loader.loadAsync(url);
+    gltf.scene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const m = child as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+      }
+    });
+    const entry: CachedGLTFData = {
+      scene: gltf.scene,
+      animations: gltf.animations || [],
+    };
+    gltfCache.set(url, entry);
+    return entry;
+  } catch {
+    return null;
+  }
+}
+
+export function getCachedCityAsset(filename: string): THREE.Group | null {
+  const entry = gltfCache.get(`/models/city/${filename}`);
+  if (!entry) return null;
+  return entry.scene.clone(true);
+}
+
+/**
+ * Preloads all real 3D .GLB assets (characters, vehicles, city buildings, trees & props)
+ * so every 3D object in GTA Indonesia renders immediately with real .glb meshes.
+ */
+export async function preloadAllGameModels(
+  onProgress?: (pct: number, label: string) => void
+): Promise<void> {
+  const urls = new Set<string>();
+  urls.add("/models/characters/Soldier.glb");
+  urls.add("/models/characters/Michelle.glb");
+  for (const spec of VEHICLE_SPECS) {
+    if (spec.glbPath) urls.add(spec.glbPath);
+  }
+  for (const file of CITY_ASSET_FILES) {
+    urls.add(`/models/city/${file}`);
+  }
+
+  const list = Array.from(urls);
+  let loaded = 0;
+  const concurrency = 6;
+
+  for (let i = 0; i < list.length; i += concurrency) {
+    const batch = list.slice(i, i + concurrency);
+    await Promise.all(
+      batch.map(async (url) => {
+        await loadGLTFUrl(url);
+        loaded++;
+        const pct = Math.round((loaded / list.length) * 100);
+        if (onProgress) {
+          onProgress(pct, `Memuat model 3D nyata (${loaded}/${list.length}): ${url.split("/").pop()}`);
+        }
+      })
+    );
+  }
+}
 
 export interface CabinFitResult {
   scale: number;
@@ -295,7 +410,7 @@ export function autoScaleAndFitCabin(
 
   model.scale.set(
     uniformScale,
-    Math.min(Math.max(scaleY, uniformScale * 0.85), uniformScale * 1.25),
+    Math.min(Math.max(scaleY, uniformScale * 0.8), uniformScale * 1.25),
     uniformScale
   );
   model.updateMatrixWorld(true);
@@ -313,7 +428,7 @@ export function autoScaleAndFitCabin(
   const dims = new THREE.Vector3();
   finalBox.getSize(dims);
 
-  const seatY = Math.max(0.26, dims.y * 0.24);
+  const seatY = Math.max(0.24, dims.y * 0.22);
   const seatZ = dims.z * 0.04;
   const seatX = -dims.x * 0.19;
 
@@ -321,78 +436,9 @@ export function autoScaleAndFitCabin(
     scale: uniformScale,
     dimensions: dims,
     seatOffset: new THREE.Vector3(seatX, seatY, seatZ),
-    cockpitCamOffset: new THREE.Vector3(seatX, seatY + 0.62, seatZ + 0.14),
+    cockpitCamOffset: new THREE.Vector3(seatX, seatY + 0.65, seatZ + 0.16),
     hoodCamOffset: new THREE.Vector3(0, dims.y * 0.68, dims.z * 0.24),
   };
-}
-
-let sharedGLTFLoader: GLTFLoader | null = null;
-const glbCache = new Map<string, THREE.Group>();
-
-function getGLTFLoader(): GLTFLoader {
-  if (!sharedGLTFLoader) {
-    sharedGLTFLoader = new GLTFLoader();
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath(
-      "https://www.gstatic.com/draco/versioned/decoders/1.5.7/"
-    );
-    sharedGLTFLoader.setDRACOLoader(dracoLoader);
-  }
-  return sharedGLTFLoader;
-}
-
-export async function loadGLBModelCached(url: string): Promise<THREE.Group | null> {
-  if (glbCache.has(url)) {
-    return glbCache.get(url)!.clone(true);
-  }
-  try {
-    const loader = getGLTFLoader();
-    const gltf = await loader.loadAsync(url);
-    const scene = gltf.scene;
-    scene.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        const mesh = child as THREE.Mesh;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-      }
-    });
-    glbCache.set(url, scene);
-    return scene.clone(true);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Helper to create a smooth curved extruded profile aligned so +Z is forward, +Y is up, X is width.
- */
-function buildCurvedExtrudedBody(
-  pointsZY: Array<[number, number]>,
-  width: number,
-  bevelSize = 0.06
-): THREE.BufferGeometry {
-  const shape = new THREE.Shape();
-  shape.moveTo(pointsZY[0][0], pointsZY[0][1]);
-  for (let i = 1; i < pointsZY.length; i++) {
-    shape.lineTo(pointsZY[i][0], pointsZY[i][1]);
-  }
-  shape.closePath();
-
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: width - bevelSize * 2,
-    bevelEnabled: true,
-    bevelSegments: 3,
-    steps: 1,
-    bevelSize,
-    bevelThickness: bevelSize,
-  });
-
-  // ExtrudeGeometry extrudes along +Z from 2D XY.
-  // Rotate so 2D X becomes +Z (car length), 2D Y stays +Y (height), and extrusion depth centers on X (car width).
-  geo.translate(0, 0, -(width - bevelSize * 2) / 2);
-  geo.rotateY(-Math.PI / 2);
-  geo.computeVertexNormals();
-  return geo;
 }
 
 export interface VehicleInstance {
@@ -401,15 +447,9 @@ export interface VehicleInstance {
   group: THREE.Group;
   cabinFit: CabinFitResult;
   wheels: THREE.Object3D[];
-  headlights: THREE.Mesh[];
-  taillights: THREE.Mesh[];
-  leftTurnSignals: THREE.Mesh[];
-  rightTurnSignals: THREE.Mesh[];
   sirenRed?: THREE.Mesh;
   sirenBlue?: THREE.Mesh;
   neonMesh?: THREE.Mesh;
-  bodyMeshes: THREE.Mesh[];
-  rimMeshes: THREE.Mesh[];
   setPaintColor: (hex: string) => void;
   setRimColor: (hex: string) => void;
   setPlateText: (plate: string) => void;
@@ -438,7 +478,6 @@ export function createVehicleMesh(
 ): VehicleInstance {
   const spec = VEHICLE_SPECS.find((v) => v.id === kind) ?? VEHICLE_SPECS[0];
   const paintHex = options?.paintColor ?? spec.defaultColor;
-  const rimHex = options?.rimColor ?? "#e2e8f0";
   const plateStr = options?.plateText ?? spec.defaultPlate;
   const neonHex = options?.neonColor ?? "#ff3e9d";
 
@@ -446,430 +485,111 @@ export function createVehicleMesh(
   const modelBody = new THREE.Group();
   root.add(modelBody);
 
-  const bodyMeshes: THREE.Mesh[] = [];
-  const rimMeshes: THREE.Mesh[] = [];
   const wheels: THREE.Object3D[] = [];
-  const headlights: THREE.Mesh[] = [];
-  const taillights: THREE.Mesh[] = [];
-  const leftTurnSignals: THREE.Mesh[] = [];
-  const rightTurnSignals: THREE.Mesh[] = [];
-  let sirenRed: THREE.Mesh | undefined;
-  let sirenBlue: THREE.Mesh | undefined;
+  const paintableMats: THREE.MeshStandardMaterial[] = [];
+  const rimMats: THREE.MeshStandardMaterial[] = [];
 
-  const paintMat = new THREE.MeshPhysicalMaterial({
-    color: new THREE.Color(paintHex),
-    metalness: 0.78,
-    roughness: 0.18,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.06,
-  });
+  const cachedGLB = spec.glbPath ? gltfCache.get(spec.glbPath) : null;
 
-  const trimDarkMat = new THREE.MeshStandardMaterial({
-    color: 0x0f172a,
-    metalness: 0.45,
-    roughness: 0.5,
-  });
-
-  // Dark tinted transparent film glass (kaca film gelap transparan)
-  const glassMat = new THREE.MeshPhysicalMaterial({
-    color: 0x0b1628,
-    metalness: 0.15,
-    roughness: 0.05,
-    transparent: true,
-    opacity: 0.44,
-    clearcoat: 1.0,
-  });
-
-  const interiorMat = new THREE.MeshStandardMaterial({
-    color: 0x1c212b,
-    roughness: 0.8,
-  });
-
-  const tireMat = new THREE.MeshStandardMaterial({
-    color: 0x111317,
-    roughness: 0.85,
-    metalness: 0.1,
-  });
-
-  const rimMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(rimHex),
-    metalness: 0.92,
-    roughness: 0.18,
-  });
-
-  const caliperMat = new THREE.MeshStandardMaterial({
-    color: 0xef4444,
-    metalness: 0.6,
-    roughness: 0.3,
-  });
-
-  const headlightMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    emissive: new THREE.Color(0xe0f2fe),
-    emissiveIntensity: 1.5,
-  });
-
-  const taillightMat = new THREE.MeshStandardMaterial({
-    color: 0xef4444,
-    emissive: new THREE.Color(0xdc2626),
-    emissiveIntensity: 1.1,
-  });
-
-  const leftSignalMat = new THREE.MeshStandardMaterial({
-    color: 0xf59e0b,
-    emissive: new THREE.Color(0xf59e0b),
-    emissiveIntensity: 0.0,
-  });
-
-  const rightSignalMat = new THREE.MeshStandardMaterial({
-    color: 0xf59e0b,
-    emissive: new THREE.Color(0xf59e0b),
-    emissiveIntensity: 0.0,
-  });
-
-  const addBox = (
-    w: number,
-    h: number,
-    d: number,
-    x: number,
-    y: number,
-    z: number,
-    mat: THREE.Material,
-    isBody = false
-  ) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    modelBody.add(mesh);
-    if (isBody) bodyMeshes.push(mesh);
-    return mesh;
-  };
-
-  // Detailed Racing Alloy Wheel + Brake Caliper
-  const addAlloyWheel = (x: number, y: number, z: number, radius = 0.34, width = 0.27) => {
-    const wg = new THREE.Group();
-    wg.position.set(x, y, z);
-
-    const tire = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius, radius, width, 24),
-      tireMat
-    );
-    tire.rotation.z = Math.PI / 2;
-    tire.castShadow = true;
-    wg.add(tire);
-
-    const rim = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.64, radius * 0.64, width + 0.02, 16),
-      rimMat
-    );
-    rim.rotation.z = Math.PI / 2;
-    wg.add(rim);
-    rimMeshes.push(rim);
-
-    // 5-spoke star cross & center cap
-    for (let s = 0; s < 5; s++) {
-      const spoke = new THREE.Mesh(
-        new THREE.BoxGeometry(width + 0.03, radius * 1.15, 0.045),
-        rimMat
-      );
-      spoke.rotation.x = (s * Math.PI) / 5;
-      wg.add(spoke);
+  if (cachedGLB) {
+    const glbClone = cachedGLB.scene.clone(true);
+    if (spec.glbYawOffset) {
+      glbClone.rotation.y = spec.glbYawOffset;
     }
 
-    // Brake caliper accent
-    const caliper = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.55, radius * 0.42, radius * 0.32),
-      caliperMat
-    );
-    caliper.position.set(x > 0 ? 0.02 : -0.02, 0.04, -radius * 0.28);
-    wg.add(caliper);
+    // Clone materials per vehicle instance so paint/rim customization does not mutate shared cache
+    glbClone.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const m = child as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
 
-    modelBody.add(wg);
-    wheels.push(wg);
-  };
+        const cloneMat = (mat: THREE.Material) => {
+          const cloned = mat.clone() as THREE.MeshStandardMaterial;
+          const mName = (cloned.name || "").toLowerCase();
+          if (
+            mName.includes("body") ||
+            mName.includes("car") ||
+            mName.includes("paint") ||
+            mName.includes("parede")
+          ) {
+            paintableMats.push(cloned);
+          }
+          if (mName.includes("metal") || mName.includes("rim")) {
+            rimMats.push(cloned);
+          }
+          return cloned;
+        };
 
-  let plateTexture = getLicensePlateTexture(plateStr, true);
-  const plateMat = new THREE.MeshStandardMaterial({
-    map: plateTexture,
-    roughness: 0.35,
-  });
-  let frontPlateMesh: THREE.Mesh | null = null;
-  let rearPlateMesh: THREE.Mesh | null = null;
+        if (Array.isArray(m.material)) {
+          m.material = m.material.map(cloneMat);
+        } else if (m.material) {
+          m.material = cloneMat(m.material);
+        }
+      }
 
-  if (spec.silhouette === "jet") {
-    const fuselage = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.85, 0.72, 8.8, 20),
-      paintMat
-    );
-    fuselage.rotation.x = Math.PI / 2;
-    fuselage.position.set(0, 1.35, 0);
-    fuselage.castShadow = true;
-    modelBody.add(fuselage);
-    bodyMeshes.push(fuselage);
+      if (/wheel/i.test(child.name) && !/steering/i.test(child.name)) {
+        wheels.push(child);
+      }
+    });
 
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.85, 1.8, 20), paintMat);
-    nose.rotation.x = Math.PI / 2;
-    nose.position.set(0, 1.35, 5.3);
-    modelBody.add(nose);
-    bodyMeshes.push(nose);
+    if (options?.paintColor && paintableMats.length > 0) {
+      paintableMats.forEach((pm) => pm.color.set(paintHex));
+    }
 
-    addBox(1.1, 0.6, 1.9, 0, 1.95, 2.4, glassMat);
-    addBox(8.8, 0.14, 1.8, 0, 1.15, 0.2, paintMat, true);
-    addBox(0.16, 1.8, 1.4, 0, 2.4, -3.7, trimDarkMat);
-    addBox(3.4, 0.1, 0.9, 0, 1.45, -3.9, paintMat, true);
-    addAlloyWheel(0, 0.3, 3.2, 0.28, 0.22);
-    addAlloyWheel(-1.1, 0.3, -0.5, 0.3, 0.24);
-    addAlloyWheel(1.1, 0.3, -0.5, 0.3, 0.24);
-  } else if (spec.silhouette === "boat") {
-    addBox(2.15, 0.65, 5.8, 0, 0.42, 0, paintMat, true);
-    addBox(1.75, 0.42, 2.0, 0, 0.85, 0.2, glassMat);
-    addBox(0.55, 0.45, 0.55, -0.45, 0.72, -0.2, interiorMat);
-    addBox(0.55, 0.45, 0.55, 0.45, 0.72, -0.2, interiorMat);
-    addBox(0.35, 0.7, 0.45, -0.42, 0.55, -3.05, trimDarkMat);
-    addBox(0.35, 0.7, 0.45, 0.42, 0.55, -3.05, trimDarkMat);
-    headlights.push(addBox(0.5, 0.14, 0.1, 0, 0.72, 2.9, headlightMat));
-  } else if (spec.silhouette === "motor") {
-    // Indonesian Street Motorbike / Scooter
-    const motorProfile: Array<[number, number]> = [
-      [-0.85, 0.35], [0.85, 0.35], [0.95, 0.92], [0.55, 1.05],
-      [0.15, 0.62], [-0.35, 0.74], [-0.9, 0.78]
-    ];
-    const body = new THREE.Mesh(buildCurvedExtrudedBody(motorProfile, 0.52, 0.04), paintMat);
-    body.castShadow = true;
-    modelBody.add(body);
-    bodyMeshes.push(body);
-    addBox(0.68, 0.08, 0.1, 0, 1.02, 0.55, trimDarkMat); // Handlebars
-    addAlloyWheel(0, 0.28, 0.68, 0.28, 0.14);
-    addAlloyWheel(0, 0.28, -0.68, 0.28, 0.16);
-    headlights.push(addBox(0.22, 0.14, 0.08, 0, 0.88, 0.94, headlightMat));
-    taillights.push(addBox(0.22, 0.1, 0.08, 0, 0.76, -0.92, taillightMat));
-  } else if (spec.silhouette === "bus") {
-    const busProfile: Array<[number, number]> = [
-      [-4.8, 0.36], [4.8, 0.36], [4.86, 1.45], [4.62, 2.9], [-4.72, 2.95], [-4.86, 1.25]
-    ];
-    const busBody = new THREE.Mesh(buildCurvedExtrudedBody(busProfile, 2.4, 0.08), paintMat);
-    busBody.castShadow = true;
-    modelBody.add(busBody);
-    bodyMeshes.push(busBody);
-
-    addBox(2.44, 0.24, 9.5, 0, 1.15, 0, new THREE.MeshStandardMaterial({ color: 0xffffff }));
-    addBox(2.38, 1.08, 9.1, 0, 2.1, 0.05, glassMat);
-    addBox(1.4, 0.24, 2.6, 0, 3.05, 0.5, trimDarkMat);
-
-    addAlloyWheel(-1.12, 0.46, 2.8, 0.46, 0.34);
-    addAlloyWheel(1.12, 0.46, 2.8, 0.46, 0.34);
-    addAlloyWheel(-1.12, 0.46, -2.7, 0.46, 0.34);
-    addAlloyWheel(1.12, 0.46, -2.7, 0.46, 0.34);
-
-    headlights.push(
-      addBox(0.38, 0.16, 0.08, -0.82, 0.75, 4.86, headlightMat),
-      addBox(0.38, 0.16, 0.08, 0.82, 0.75, 4.86, headlightMat)
-    );
-    taillights.push(
-      addBox(0.38, 0.22, 0.08, -0.85, 0.82, -4.86, taillightMat),
-      addBox(0.38, 0.22, 0.08, 0.85, 0.82, -4.86, taillightMat)
-    );
-    frontPlateMesh = addBox(0.52, 0.16, 0.04, 0, 0.52, 4.88, plateMat);
-    rearPlateMesh = addBox(0.52, 0.16, 0.04, 0, 0.52, -4.88, plateMat);
+    modelBody.add(glbClone);
   } else {
-    // Aerodynamic Curved Silhouettes for Avanza/Innova (MPV), Mercy/BMW/Civic/Bluebird/PJR (Sedan), Supercar/Sport
-    const isMpv = spec.silhouette === "mpv";
-    const isSuper = spec.silhouette === "supercar";
-    const length = spec.targetDims.length;
-    const width = spec.targetDims.width;
-    const halfL = length / 2;
+    // Clean fallback only for Motor / Jet / Speedboat
+    const paintMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(paintHex),
+      metalness: 0.72,
+      roughness: 0.22,
+      clearcoat: 1.0,
+    });
+    paintableMats.push(paintMat);
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.7 });
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0b1628,
+      transparent: true,
+      opacity: 0.45,
+    });
 
-    const bodyProfile: Array<[number, number]> = isMpv
-      ? [
-          [-halfL + 0.05, 0.24],
-          [halfL - 0.05, 0.24],
-          [halfL + 0.02, 0.64],
-          [halfL - 0.28, 0.94],
-          [halfL * 0.52, 1.02],
-          [halfL * 0.22, 1.56],
-          [-halfL + 0.45, 1.58],
-          [-halfL + 0.08, 1.08],
-          [-halfL - 0.02, 0.62],
-        ]
-      : isSuper
-      ? [
-          [-halfL + 0.05, 0.2],
-          [halfL - 0.05, 0.2],
-          [halfL + 0.06, 0.46],
-          [halfL - 0.35, 0.74],
-          [halfL * 0.42, 0.82],
-          [halfL * 0.08, 1.18],
-          [-halfL * 0.45, 1.18],
-          [-halfL + 0.3, 0.86],
-          [-halfL - 0.04, 0.76],
-          [-halfL - 0.06, 0.42],
-        ]
-      : [
-          [-halfL + 0.05, 0.24],
-          [halfL - 0.05, 0.24],
-          [halfL + 0.02, 0.56],
-          [halfL - 0.28, 0.84],
-          [halfL * 0.46, 0.92],
-          [halfL * 0.14, 1.36],
-          [-halfL * 0.42, 1.36],
-          [-halfL + 0.44, 0.94],
-          [-halfL + 0.04, 0.88],
-          [-halfL - 0.03, 0.5],
-        ];
-
-    const curvedBody = new THREE.Mesh(
-      buildCurvedExtrudedBody(bodyProfile, width - 0.04, 0.06),
-      paintMat
-    );
-    curvedBody.castShadow = true;
-    curvedBody.receiveShadow = true;
-    modelBody.add(curvedBody);
-    bodyMeshes.push(curvedBody);
-
-    // Tinted transparent curved greenhouse cabin
-    const glassTop = isMpv ? 1.51 : isSuper ? 1.14 : 1.32;
-    const glassFront = isMpv ? halfL * 0.5 : halfL * 0.44;
-    const glassRear = isMpv ? -halfL + 0.42 : -halfL + 0.46;
-    const glassProfile: Array<[number, number]> = [
-      [glassFront, isMpv ? 0.96 : 0.88],
-      [halfL * 0.16, glassTop],
-      [isMpv ? -halfL + 0.52 : -halfL * 0.4, glassTop],
-      [glassRear, isMpv ? 1.02 : 0.92],
-    ];
-    const curvedGlass = new THREE.Mesh(
-      buildCurvedExtrudedBody(glassProfile, width * 0.87, 0.03),
-      glassMat
-    );
-    modelBody.add(curvedGlass);
-
-    // Interior seats & dashboard visible through glass
-    addBox(width * 0.72, 0.08, 1.4, 0, 0.48, 0, interiorMat);
-    addBox(0.45, 0.5, 0.45, -0.38, 0.72, 0.04, interiorMat);
-    addBox(0.45, 0.5, 0.45, 0.38, 0.72, 0.04, interiorMat);
-    addBox(width * 0.68, 0.2, 0.28, 0, 0.82, 0.52, trimDarkMat);
-
-    // Front grille + splitter + rear diffuser
-    addBox(width * 0.62, 0.24, 0.08, 0, 0.52, halfL + 0.02, trimDarkMat);
-    addBox(width + 0.02, 0.1, 0.24, 0, 0.24, halfL - 0.05, trimDarkMat);
-    addBox(width * 0.92, 0.14, 0.2, 0, 0.28, -halfL + 0.04, trimDarkMat);
-
-    // Side Wing Mirrors (Spion)
-    const mirrorY = isMpv ? 0.98 : 0.9;
-    addBox(0.18, 0.11, 0.14, -width * 0.52, mirrorY, halfL * 0.26, paintMat, true);
-    addBox(0.18, 0.11, 0.14, width * 0.52, mirrorY, halfL * 0.26, paintMat, true);
-
-    // Rear Spoiler for Sport / Supercar / BMW / Civic
-    if (isSuper || kind === "bmw" || kind === "civic" || kind === "sport") {
-      addBox(0.08, 0.2, 0.16, -0.58, 0.98, -halfL + 0.2, trimDarkMat);
-      addBox(0.08, 0.2, 0.16, 0.58, 0.98, -halfL + 0.2, trimDarkMat);
-      addBox(width * 0.92, 0.05, 0.28, 0, 1.1, -halfL + 0.18, trimDarkMat);
+    if (kind === "jet") {
+      const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.65, 8.8, 16), paintMat);
+      fus.rotation.x = Math.PI / 2;
+      fus.position.y = 1.35;
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1.8, 16), paintMat);
+      nose.rotation.x = Math.PI / 2;
+      nose.position.set(0, 1.35, 5.3);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(8.8, 0.14, 1.8), paintMat);
+      wing.position.set(0, 1.15, 0.2);
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.8, 1.4), darkMat);
+      tail.position.set(0, 2.4, -3.7);
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 1.9), glassMat);
+      canopy.position.set(0, 1.95, 2.4);
+      modelBody.add(fus, nose, wing, tail, canopy);
+    } else if (kind === "speedboat") {
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.65, 5.8), paintMat);
+      hull.position.y = 0.42;
+      const shield = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.42, 2.0), glassMat);
+      shield.position.set(0, 0.85, 0.2);
+      modelBody.add(hull, shield);
+    } else {
+      // Motor
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.55, 1.75), paintMat);
+      frame.position.y = 0.56;
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 0.1), darkMat);
+      bar.position.set(0, 1.0, 0.55);
+      modelBody.add(frame, bar);
+      [0.68, -0.68].forEach((wz) => {
+        const t = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.14, 14), darkMat);
+        t.rotation.z = Math.PI / 2;
+        t.position.set(0, 0.28, wz);
+        modelBody.add(t);
+        wheels.push(t);
+      });
     }
-
-    // Bluebird Taxi Top Light
-    if (spec.isTaxi) {
-      addBox(
-        0.52,
-        0.16,
-        0.24,
-        0,
-        glassTop + 0.1,
-        0.05,
-        new THREE.MeshStandardMaterial({
-          color: 0xfef08a,
-          emissive: new THREE.Color(0xfacc15),
-          emissiveIntensity: 0.9,
-        })
-      );
-    }
-
-    // Police PJR Blue Stripe & Strobe Siren Bar
-    if (spec.isPolice) {
-      addBox(
-        width + 0.02,
-        0.18,
-        length * 0.72,
-        0,
-        0.65,
-        0,
-        new THREE.MeshStandardMaterial({ color: 0x1d4ed8 })
-      );
-      sirenRed = addBox(
-        0.52,
-        0.13,
-        0.24,
-        -0.3,
-        glassTop + 0.12,
-        -0.1,
-        new THREE.MeshStandardMaterial({
-          color: 0xff0022,
-          emissive: new THREE.Color(0xff0022),
-          emissiveIntensity: 2.0,
-        })
-      );
-      sirenBlue = addBox(
-        0.52,
-        0.13,
-        0.24,
-        0.3,
-        glassTop + 0.12,
-        -0.1,
-        new THREE.MeshStandardMaterial({
-          color: 0x0066ff,
-          emissive: new THREE.Color(0x0066ff),
-          emissiveIntensity: 2.0,
-        })
-      );
-    }
-
-    // 4 Multi-spoke Alloy Wheels
-    const wheelR = isMpv ? 0.36 : 0.33;
-    const wheelZ = length * 0.31;
-    addAlloyWheel(-width * 0.47, wheelR, wheelZ, wheelR, 0.26);
-    addAlloyWheel(width * 0.47, wheelR, wheelZ, wheelR, 0.26);
-    addAlloyWheel(-width * 0.47, wheelR, -wheelZ, wheelR, 0.26);
-    addAlloyWheel(width * 0.47, wheelR, -wheelZ, wheelR, 0.26);
-
-    // LED Projector Headlights + DRL strips
-    const lightY = isMpv ? 0.7 : 0.62;
-    headlights.push(
-      addBox(0.34, 0.11, 0.06, -width * 0.33, lightY, halfL + 0.02, headlightMat),
-      addBox(0.34, 0.11, 0.06, width * 0.33, lightY, halfL + 0.02, headlightMat)
-    );
-    taillights.push(
-      addBox(0.42, 0.11, 0.06, -width * 0.31, lightY + 0.08, -halfL - 0.02, taillightMat),
-      addBox(0.42, 0.11, 0.06, width * 0.31, lightY + 0.08, -halfL - 0.02, taillightMat)
-    );
-
-    // Turn Signals
-    leftTurnSignals.push(
-      addBox(0.14, 0.09, 0.08, -width * 0.44, lightY, halfL + 0.02, leftSignalMat),
-      addBox(0.14, 0.09, 0.08, -width * 0.44, lightY + 0.06, -halfL - 0.02, leftSignalMat)
-    );
-    rightTurnSignals.push(
-      addBox(0.14, 0.09, 0.08, width * 0.44, lightY, halfL + 0.02, rightSignalMat),
-      addBox(0.14, 0.09, 0.08, width * 0.44, lightY + 0.06, -halfL - 0.02, rightSignalMat)
-    );
-
-    // White Jakarta License Plates
-    frontPlateMesh = addBox(0.48, 0.14, 0.03, 0, 0.38, halfL + 0.03, plateMat);
-    rearPlateMesh = addBox(0.48, 0.14, 0.03, 0, 0.48, -halfL - 0.03, plateMat);
   }
-
-  // Neon underglow
-  const neonMat = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(neonHex),
-    transparent: true,
-    opacity: options?.neonEnabled ? 0.55 : 0.0,
-    side: THREE.DoubleSide,
-  });
-  const neonMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(spec.targetDims.width * 1.15, spec.targetDims.length * 0.92),
-    neonMat
-  );
-  neonMesh.rotation.x = -Math.PI / 2;
-  neonMesh.position.y = 0.04;
-  modelBody.add(neonMesh);
 
   const cabinFit = autoScaleAndFitCabin(
     modelBody,
@@ -878,9 +598,101 @@ export function createVehicleMesh(
     spec.targetDims.height
   );
 
-  if (spec.glbPath) {
-    loadGLBModelCached(spec.glbPath).catch(() => {});
+  const halfL = cabinFit.dimensions.z / 2;
+  const width = cabinFit.dimensions.x;
+  const height = cabinFit.dimensions.y;
+
+  // Indonesian White License Plates (front & rear) attached to scaled vehicle bounds
+  let plateTexture = getLicensePlateTexture(plateStr, true);
+  const plateMat = new THREE.MeshStandardMaterial({ map: plateTexture, roughness: 0.35 });
+  if (kind !== "jet" && kind !== "speedboat" && kind !== "motor") {
+    const fPlate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.03), plateMat);
+    fPlate.position.set(0, 0.36, halfL + 0.02);
+    const rPlate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.03), plateMat);
+    rPlate.position.set(0, 0.44, -halfL - 0.02);
+    root.add(fPlate, rPlate);
   }
+
+  // Headlight, Brake & Turn Signal LED Strips
+  const hlMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: new THREE.Color(0xe0f2fe),
+    emissiveIntensity: 1.4,
+  });
+  const tlMat = new THREE.MeshStandardMaterial({
+    color: 0xef4444,
+    emissive: new THREE.Color(0xdc2626),
+    emissiveIntensity: 1.0,
+  });
+  const leftSigMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b,
+    emissive: new THREE.Color(0xf59e0b),
+    emissiveIntensity: 0,
+  });
+  const rightSigMat = new THREE.MeshStandardMaterial({
+    color: 0xf59e0b,
+    emissive: new THREE.Color(0xf59e0b),
+    emissiveIntensity: 0,
+  });
+
+  if (kind !== "jet" && kind !== "motor") {
+    [-width * 0.33, width * 0.33].forEach((lx) => {
+      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.04), hlMat);
+      hl.position.set(lx, height * 0.42, halfL + 0.01);
+      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.09, 0.04), tlMat);
+      tl.position.set(lx, height * 0.46, -halfL - 0.01);
+      root.add(hl, tl);
+    });
+    const lsF = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), leftSigMat);
+    lsF.position.set(-width * 0.44, height * 0.42, halfL + 0.01);
+    const lsR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), leftSigMat);
+    lsR.position.set(-width * 0.44, height * 0.46, -halfL - 0.01);
+    const rsF = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), rightSigMat);
+    rsF.position.set(width * 0.44, height * 0.42, halfL + 0.01);
+    const rsR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), rightSigMat);
+    rsR.position.set(width * 0.44, height * 0.46, -halfL - 0.01);
+    root.add(lsF, lsR, rsF, rsR);
+  }
+
+  // Police PJR Red/Blue Strobe Bar
+  let sirenRed: THREE.Mesh | undefined;
+  let sirenBlue: THREE.Mesh | undefined;
+  if (spec.isPolice) {
+    sirenRed = new THREE.Mesh(
+      new THREE.BoxGeometry(0.46, 0.12, 0.22),
+      new THREE.MeshStandardMaterial({
+        color: 0xff0022,
+        emissive: new THREE.Color(0xff0022),
+        emissiveIntensity: 2.4,
+      })
+    );
+    sirenRed.position.set(-0.28, height + 0.06, -0.05);
+    sirenBlue = new THREE.Mesh(
+      new THREE.BoxGeometry(0.46, 0.12, 0.22),
+      new THREE.MeshStandardMaterial({
+        color: 0x0066ff,
+        emissive: new THREE.Color(0x0066ff),
+        emissiveIntensity: 2.4,
+      })
+    );
+    sirenBlue.position.set(0.28, height + 0.06, -0.05);
+    root.add(sirenRed, sirenBlue);
+  }
+
+  // Neon Underglow
+  const neonMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(neonHex),
+    transparent: true,
+    opacity: options?.neonEnabled ? 0.52 : 0.0,
+    side: THREE.DoubleSide,
+  });
+  const neonMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width * 1.15, spec.targetDims.length * 0.92),
+    neonMat
+  );
+  neonMesh.rotation.x = -Math.PI / 2;
+  neonMesh.position.y = 0.035;
+  root.add(neonMesh);
 
   return {
     kind,
@@ -888,31 +700,23 @@ export function createVehicleMesh(
     group: root,
     cabinFit,
     wheels,
-    headlights,
-    taillights,
-    leftTurnSignals,
-    rightTurnSignals,
     sirenRed,
     sirenBlue,
     neonMesh,
-    bodyMeshes,
-    rimMeshes,
     setPaintColor: (hex: string) => {
-      paintMat.color.set(hex);
+      paintableMats.forEach((m) => m.color.set(hex));
     },
     setRimColor: (hex: string) => {
-      rimMat.color.set(hex);
+      rimMats.forEach((m) => m.color.set(hex));
     },
     setPlateText: (plate: string) => {
       plateTexture = getLicensePlateTexture(plate, true);
       plateMat.map = plateTexture;
       plateMat.needsUpdate = true;
-      if (frontPlateMesh) frontPlateMesh.visible = true;
-      if (rearPlateMesh) rearPlateMesh.visible = true;
     },
     setNeon: (enabled: boolean, hex?: string) => {
       if (hex) neonMat.color.set(hex);
-      neonMat.opacity = enabled ? 0.55 : 0.0;
+      neonMat.opacity = enabled ? 0.52 : 0.0;
     },
     setLightsState: ({
       headlightsOn,
@@ -923,23 +727,23 @@ export function createVehicleMesh(
       timeSec,
       policeActive,
     }) => {
-      headlightMat.emissiveIntensity = headlightsOn ? 2.5 : 0.5;
-      taillightMat.emissiveIntensity = braking ? 3.4 : headlightsOn ? 1.2 : 0.3;
+      hlMat.emissiveIntensity = headlightsOn ? 2.4 : 0.45;
+      tlMat.emissiveIntensity = braking ? 3.5 : headlightsOn ? 1.2 : 0.3;
 
       const blink = Math.sin(timeSec * 8) > 0;
-      leftSignalMat.emissiveIntensity = (leftTurn || hazard) && blink ? 3.0 : 0.0;
-      rightSignalMat.emissiveIntensity = (rightTurn || hazard) && blink ? 3.0 : 0.0;
+      leftSigMat.emissiveIntensity = (leftTurn || hazard) && blink ? 3.2 : 0.0;
+      rightSigMat.emissiveIntensity = (rightTurn || hazard) && blink ? 3.2 : 0.0;
 
       if (sirenRed && sirenBlue) {
         const phase = Math.sin(timeSec * 14) > 0;
         const rMat = sirenRed.material as THREE.MeshStandardMaterial;
         const bMat = sirenBlue.material as THREE.MeshStandardMaterial;
         if (policeActive) {
-          rMat.emissiveIntensity = phase ? 4.4 : 0.2;
-          bMat.emissiveIntensity = phase ? 0.2 : 4.4;
+          rMat.emissiveIntensity = phase ? 4.5 : 0.2;
+          bMat.emissiveIntensity = phase ? 0.2 : 4.5;
         } else {
-          rMat.emissiveIntensity = 0.5;
-          bMat.emissiveIntensity = 0.5;
+          rMat.emissiveIntensity = 0.6;
+          bMat.emissiveIntensity = 0.6;
         }
       }
     },
@@ -964,6 +768,7 @@ export interface CharacterInstance {
   weaponMesh: THREE.Group;
   setSittingInCabin: (sitting: boolean) => void;
   animate: (opts: {
+    dt: number;
     timeSec: number;
     speedRatio: number;
     isJumping: boolean;
@@ -973,75 +778,81 @@ export interface CharacterInstance {
   dispose: () => void;
 }
 
-export function createCharacterMesh(): CharacterInstance {
+/**
+ * Rigged Skeletal-Animated 3D Human Character (Soldier.glb with Idle, Walk, Run AnimationClips)
+ * cloned safely via SkeletonUtils.clone.
+ */
+export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInstance {
   const group = new THREE.Group();
+  const soldierCache = gltfCache.get("/models/characters/Soldier.glb");
 
-  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd99b72, roughness: 0.65 });
-  const jacketMat = new THREE.MeshStandardMaterial({ color: 0xff3e9d, roughness: 0.55 });
-  const shirtMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7 });
-  const jeansMat = new THREE.MeshStandardMaterial({ color: 0x1e3a5f, roughness: 0.8 });
-  const hairMat = new THREE.MeshStandardMaterial({ color: 0x111115, roughness: 0.85 });
-  const shoeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5 });
-
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.56, 0.26), jacketMat);
-  torso.position.y = 1.16;
-  torso.castShadow = true;
-  group.add(torso);
-
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.3, 0.28), skinMat);
-  head.position.y = 1.61;
-  head.castShadow = true;
-  group.add(head);
-
-  const hair = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.3), hairMat);
-  hair.position.set(0, 1.74, -0.01);
-  group.add(hair);
-
-  const shades = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.07, 0.06), shirtMat);
-  shades.position.set(0, 1.63, 0.14);
-  group.add(shades);
-
-  const leftArm = new THREE.Group();
-  leftArm.position.set(-0.31, 1.38, 0);
-  const lArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.5, 0.14), jacketMat);
-  lArmMesh.position.y = -0.22;
-  lArmMesh.castShadow = true;
-  leftArm.add(lArmMesh);
-  group.add(leftArm);
-
-  const rightArm = new THREE.Group();
-  rightArm.position.set(0.31, 1.38, 0);
-  const rArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.5, 0.14), jacketMat);
-  rArmMesh.position.y = -0.22;
-  rArmMesh.castShadow = true;
-  rightArm.add(rArmMesh);
+  let mixer: THREE.AnimationMixer | null = null;
+  let idleAction: THREE.AnimationAction | null = null;
+  let walkAction: THREE.AnimationAction | null = null;
+  let runAction: THREE.AnimationAction | null = null;
+  let currentAction: THREE.AnimationAction | null = null;
 
   const weaponMesh = new THREE.Group();
-  weaponMesh.position.set(0, -0.45, 0.14);
-  const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.32), shirtMat);
-  weaponMesh.add(gunBody);
+  const rifleBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06, 0.14, 0.52),
+    new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.7, roughness: 0.3 })
+  );
+  rifleBody.position.set(0.26, 1.25, 0.36);
+  weaponMesh.add(rifleBody);
   weaponMesh.visible = false;
-  rightArm.add(weaponMesh);
-  group.add(rightArm);
+  group.add(weaponMesh);
 
-  const makeLeg = (x: number) => {
-    const leg = new THREE.Group();
-    leg.position.set(x, 0.88, 0);
-    const legMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.78, 0.18), jeansMat);
-    legMesh.position.y = -0.4;
-    legMesh.castShadow = true;
-    leg.add(legMesh);
-    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.12, 0.26), shoeMat);
-    shoe.position.set(0, -0.82, 0.04);
-    leg.add(shoe);
-    group.add(leg);
-    return leg;
-  };
+  if (soldierCache) {
+    const model = SkeletonUtils.clone(soldierCache.scene) as THREE.Group;
+    model.rotation.y = Math.PI; // Soldier.glb natively faces -Z -> rotate to +Z forward
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const m = child as THREE.Mesh;
+        m.castShadow = true;
+        m.receiveShadow = true;
+        if (opts?.tintHex && m.material && !Array.isArray(m.material)) {
+          const clonedMat = m.material.clone() as THREE.MeshStandardMaterial;
+          clonedMat.color.lerp(new THREE.Color(opts.tintHex), 0.38);
+          m.material = clonedMat;
+        }
+      }
+    });
+    group.add(model);
 
-  const leftLeg = makeLeg(-0.12);
-  const rightLeg = makeLeg(0.12);
+    if (soldierCache.animations.length > 0) {
+      mixer = new THREE.AnimationMixer(model);
+      const findClip = (name: string) =>
+        soldierCache.animations.find((c) => c.name.toLowerCase() === name.toLowerCase());
+
+      const idleClip = findClip("Idle") || soldierCache.animations[0];
+      const walkClip = findClip("Walk") || idleClip;
+      const runClip = findClip("Run") || walkClip;
+
+      idleAction = mixer.clipAction(idleClip);
+      walkAction = mixer.clipAction(walkClip);
+      runAction = mixer.clipAction(runClip);
+
+      idleAction.play();
+      currentAction = idleAction;
+    }
+  } else {
+    // Fallback minimal articulated character if GLB wasn't cached yet
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.24, 0.9, 6, 10),
+      new THREE.MeshStandardMaterial({ color: opts?.tintHex ?? 0x2563eb })
+    );
+    body.position.y = 0.95;
+    group.add(body);
+  }
 
   let isSitting = false;
+
+  const switchAction = (next: THREE.AnimationAction | null) => {
+    if (!next || next === currentAction) return;
+    currentAction?.fadeOut(0.18);
+    next.reset().fadeIn(0.18).play();
+    currentAction = next;
+  };
 
   return {
     group,
@@ -1049,51 +860,34 @@ export function createCharacterMesh(): CharacterInstance {
     setSittingInCabin: (sitting: boolean) => {
       isSitting = sitting;
       if (sitting) {
-        group.scale.setScalar(0.56);
-        leftLeg.rotation.x = -Math.PI / 2.2;
-        rightLeg.rotation.x = -Math.PI / 2.2;
-        leftArm.rotation.x = -Math.PI / 2.8;
-        rightArm.rotation.x = -Math.PI / 2.8;
+        // Hide/compact inside tinted cabin so driver head never clips through roof
+        group.visible = false;
         weaponMesh.visible = false;
       } else {
+        group.visible = true;
         group.scale.setScalar(1.0);
-        leftLeg.rotation.set(0, 0, 0);
-        rightLeg.rotation.set(0, 0, 0);
-        leftArm.rotation.set(0, 0, 0);
-        rightArm.rotation.set(0, 0, 0);
+        switchAction(idleAction);
       }
     },
-    animate: ({ timeSec, speedRatio, isJumping, isSwimming, isAiming }) => {
+    animate: ({ dt, timeSec, speedRatio, isSwimming, isAiming }) => {
       if (isSitting) return;
       weaponMesh.visible = isAiming;
 
+      if (mixer) {
+        if (speedRatio > 1.15) switchAction(runAction);
+        else if (speedRatio > 0.12) switchAction(walkAction);
+        else switchAction(idleAction);
+        mixer.update(dt);
+      }
+
       if (isSwimming) {
-        const stroke = Math.sin(timeSec * 7);
-        torso.rotation.x = 0.6;
-        leftArm.rotation.x = -1.4 + stroke * 0.9;
-        rightArm.rotation.x = -1.4 - stroke * 0.9;
-        leftLeg.rotation.x = stroke * 0.5;
-        rightLeg.rotation.x = -stroke * 0.5;
-        return;
+        group.rotation.x = 0.45 + Math.sin(timeSec * 5) * 0.08;
+      } else {
+        group.rotation.x = 0;
       }
-
-      torso.rotation.x = 0;
-
-      if (isJumping) {
-        leftLeg.rotation.x = -0.35;
-        rightLeg.rotation.x = 0.35;
-        leftArm.rotation.x = -0.7;
-        rightArm.rotation.x = isAiming ? -1.55 : -0.7;
-        return;
-      }
-
-      const swing = Math.sin(timeSec * (8 + speedRatio * 5)) * Math.min(1, speedRatio) * 0.75;
-      leftLeg.rotation.x = swing;
-      rightLeg.rotation.x = -swing;
-      leftArm.rotation.x = -swing * 0.85;
-      rightArm.rotation.x = isAiming ? -1.55 : swing * 0.85;
     },
     dispose: () => {
+      mixer?.stopAllAction();
       group.traverse((obj) => {
         if ((obj as THREE.Mesh).isMesh) {
           const m = obj as THREE.Mesh;
@@ -1103,6 +897,50 @@ export function createCharacterMesh(): CharacterInstance {
           } else {
             m.material.dispose();
           }
+        }
+      });
+    },
+  };
+}
+
+/**
+ * Animated Michelle.glb dancer for Bundaran HI plaza atmosphere.
+ */
+export function createPlazaDancerMesh(): {
+  group: THREE.Group;
+  update: (dt: number) => void;
+  dispose: () => void;
+} {
+  const group = new THREE.Group();
+  const michelleCache = gltfCache.get("/models/characters/Michelle.glb");
+  let mixer: THREE.AnimationMixer | null = null;
+
+  if (michelleCache) {
+    const model = SkeletonUtils.clone(michelleCache.scene) as THREE.Group;
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.castShadow = true;
+      }
+    });
+    group.add(model);
+    if (michelleCache.animations.length > 0) {
+      mixer = new THREE.AnimationMixer(model);
+      const dance =
+        michelleCache.animations.find((a) => a.name.toLowerCase().includes("samba")) ||
+        michelleCache.animations[0];
+      mixer.clipAction(dance).play();
+    }
+  }
+
+  return {
+    group,
+    update: (dt: number) => mixer?.update(dt),
+    dispose: () => {
+      mixer?.stopAllAction();
+      group.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) {
+          const m = obj as THREE.Mesh;
+          m.geometry.dispose();
         }
       });
     },
