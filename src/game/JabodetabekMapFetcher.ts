@@ -41,8 +41,29 @@ export interface BuildingFootprintData {
   width: number;
   depth: number;
   height: number;
-  kind: "skyscraper" | "wisma46" | "minimarket" | "bengkel" | "warung" | "mall";
+  kind:
+    | "skyscraper"
+    | "wisma46"
+    | "minimarket"
+    | "bengkel"
+    | "warung"
+    | "mall"
+    | "fore_coffee"
+    | "kopi_kenangan"
+    | "rental_ps"
+    | "lawson_family";
   rotation: number;
+}
+
+export interface HangoutSpotData {
+  id: string;
+  name: string;
+  subtitle: string;
+  kind: "fore_coffee" | "kopi_kenangan" | "rental_ps" | "warung";
+  x: number; // Patio interaction center X
+  z: number; // Patio interaction center Z
+  buildingX: number;
+  buildingZ: number;
 }
 
 export interface SpbuStationData {
@@ -69,6 +90,8 @@ export interface MapLayoutData {
   trafficLights: TrafficLightNode[];
   halteLocations: Array<{ x: number; z: number; label: string }>;
   jpoLocations: Array<{ x: number; z: number; rotation: number }>;
+  hangoutSpots: HangoutSpotData[];
+  mrtStations: Array<{ x: number; z: number; name: string }>;
 }
 
 export const JABODETABEK_REGIONS: JabodetabekRegion[] = [
@@ -491,8 +514,88 @@ export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayou
     }
   }
 
+  // Dedicated Hangout Spots (Kafe Fore Coffee, Kopi Kenangan, Rental PS5 & Warnet 24 Jam, Warkop Taichan)
+  const hangoutSpots: HangoutSpotData[] = [
+    {
+      id: "fore_sudirman",
+      name: "Fore Coffee Sudirman",
+      subtitle: "Nongkrong & Kopi Susu Butterscotch • Restore HP & Armor",
+      kind: "fore_coffee",
+      x: 17.5,
+      z: 44,
+      buildingX: 25,
+      buildingZ: 44,
+    },
+    {
+      id: "kenangan_scbd",
+      name: "Kopi Kenangan Mantan SCBD",
+      subtitle: "Es Kopi Kenangan & Temu Komunitas Mobil • Restore HP & Nitro",
+      kind: "kopi_kenangan",
+      x: -17.5,
+      z: -62,
+      buildingX: -25,
+      buildingZ: -62,
+    },
+    {
+      id: "rental_ps_vinsky",
+      name: "Rental PS5 & Warnet Vinsky 24 Jam",
+      subtitle: "Main 6 Mini-Games Arcade & Turnamen Berhadiah ($)",
+      kind: "rental_ps",
+      x: 17.5,
+      z: 72,
+      buildingX: 25,
+      buildingZ: 72,
+    },
+    {
+      id: "warkop_taichan",
+      name: "Warkop & Sate Taichan Senayan",
+      subtitle: "Indomie Telor Kornet & Sate Taichan 24 Jam",
+      kind: "warung",
+      x: -17.5,
+      z: 112,
+      buildingX: -25,
+      buildingZ: 112,
+    },
+    {
+      id: "rental_ps_selatan",
+      name: "Warnet & Rental PS5 Blok M",
+      subtitle: "Arena Mabar PS5: Penalty Tarkam, Silat & Ojol Rush",
+      kind: "rental_ps",
+      x: 17.5,
+      z: 112,
+      buildingX: 25,
+      buildingZ: 112,
+    },
+  ];
+
+  hangoutSpots.forEach((spot) => {
+    buildings.push({
+      id: `hangout_bld_${spot.id}`,
+      name: spot.name,
+      x: spot.buildingX,
+      z: spot.buildingZ,
+      width: 12,
+      depth: 12,
+      height: 11.8,
+      kind: spot.kind,
+      rotation: 0,
+    });
+  });
+
   // Fill city blocks densely across -260..+260 with architectural skyscrapers & 3-story rukos
-  const rukoTypes: Array<"minimarket" | "bengkel" | "warung"> = [
+  const rukoTypes: Array<
+    | "minimarket"
+    | "bengkel"
+    | "warung"
+    | "fore_coffee"
+    | "kopi_kenangan"
+    | "rental_ps"
+    | "lawson_family"
+  > = [
+    "fore_coffee",
+    "kopi_kenangan",
+    "rental_ps",
+    "lawson_family",
     "minimarket",
     "bengkel",
     "warung",
@@ -514,7 +617,7 @@ export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayou
           ? "skyscraper"
           : seed === 1
           ? "mall"
-          : rukoTypes[bIdx % 3];
+          : rukoTypes[bIdx % rukoTypes.length];
 
       const height =
         kind === "skyscraper"
@@ -549,7 +652,10 @@ export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayou
         width: 14,
         depth: 14,
         height: Math.abs(rx) > 50 ? 38 + (idx % 4) * 9 : 11.8,
-        kind: Math.abs(rx) > 50 ? "skyscraper" : rukoTypes[(idx + (rx > 0 ? 1 : 0)) % 3],
+        kind:
+          Math.abs(rx) > 50
+            ? "skyscraper"
+            : rukoTypes[(idx + (rx > 0 ? 2 : 0)) % rukoTypes.length],
         rotation: 0,
       });
     });
@@ -581,9 +687,17 @@ export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayou
     : [];
 
   const jpoLocations = [
-    { x: 0, z: 42, rotation: 0 },
-    { x: 0, z: -116, rotation: 0 },
+    { x: 0, z: 145, rotation: 0 },
+    { x: 0, z: -122, rotation: 0 },
   ];
+
+  const mrtStations =
+    region.id === "jakpus" || region.id === "jaksel"
+      ? [
+          { x: -16.8, z: -38, name: "BUNDARAN HI • ASTRA" },
+          { x: 16.8, z: 82, name: "DUKUH ATAS / SUDIRMAN" },
+        ]
+      : [];
 
   return {
     region,
@@ -596,6 +710,8 @@ export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayou
     trafficLights,
     halteLocations,
     jpoLocations,
+    hangoutSpots,
+    mrtStations,
   };
 }
 

@@ -18,6 +18,7 @@ import {
   Radio,
 } from "lucide-react";
 import {
+  HangoutSpotData,
   JABODETABEK_REGIONS,
   JabodetabekRegion,
   JabodetabekRegionId,
@@ -25,7 +26,7 @@ import {
 import { VEHICLE_SPECS, VehicleKind } from "@/game/ModelRegistry";
 import { MinigameId } from "./MinigamesModal";
 import { LiveStreetViewPanel } from "./LiveStreetViewPanel";
-import { JakartaRadioHUD } from "./JakartaRadioHUD";
+import { JakartaRadioHUD, RadioChannel } from "./JakartaRadioHUD";
 
 export type TimeOfDay = "morning" | "sunset" | "night";
 
@@ -46,7 +47,11 @@ interface SmartphoneHUDProps {
   wantedLevel: number;
   radioChannelIndex: number;
   muted: boolean;
+  extraRadioChannels?: RadioChannel[];
+  hangoutSpots?: HangoutSpotData[];
+  onAddRadioChannels?: (chs: RadioChannel[]) => number;
   onChangeRadioChannel: (idx: number) => void;
+  onTeleportToSpot?: (spotId: string) => void;
   onTakeScreenshot: () => void;
   onFastTravel: (regionId: JabodetabekRegionId) => void;
   onSpawnVehicle: (kind: VehicleKind) => void;
@@ -94,7 +99,11 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
   wantedLevel,
   radioChannelIndex,
   muted,
+  extraRadioChannels = [],
+  hangoutSpots = [],
+  onAddRadioChannels,
   onChangeRadioChannel,
+  onTeleportToSpot,
   onTakeScreenshot,
   onFastTravel,
   onSpawnVehicle,
@@ -116,8 +125,8 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex items-center justify-end p-2 sm:p-4 pointer-events-none">
-      <div className="pointer-events-auto flex h-[92vh] max-h-[690px] w-[340px] sm:w-[385px] flex-col overflow-hidden rounded-[2.2rem] border-[5px] border-slate-800 bg-slate-950/95 shadow-2xl shadow-pink-500/30 backdrop-blur-xl text-white">
+    <div className="fixed inset-y-0 right-0 z-40 flex items-end justify-end p-2 pt-24 pb-3 sm:p-4 sm:pt-28 pointer-events-none">
+      <div className="pointer-events-auto flex max-h-[calc(100vh-120px)] h-[650px] w-[340px] sm:w-[385px] flex-col overflow-hidden rounded-[2.2rem] border-[5px] border-slate-800 bg-slate-950/95 shadow-2xl shadow-pink-500/30 backdrop-blur-xl text-white">
         {/* Phone Notch & Status Bar */}
         <div className="flex items-center justify-between bg-gradient-to-r from-slate-900 via-purple-950/70 to-slate-900 px-5 py-2.5 border-b border-white/10">
           <div className="flex items-center gap-1.5 text-xs font-bold text-pink-400">
@@ -181,6 +190,39 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
                 region={region}
                 onTakeScreenshot={onTakeScreenshot}
               />
+
+              {/* Spot Nongkrong & Rental PS5 Jakarta */}
+              {onTeleportToSpot && hangoutSpots.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                    Spot Kafe Nongkrong & Rental PS5
+                  </p>
+                  {hangoutSpots.map((sp) => (
+                    <button
+                      key={sp.id}
+                      onClick={() => onTeleportToSpot(sp.id)}
+                      className="w-full flex items-center justify-between rounded-xl border border-amber-500/30 bg-slate-900/80 px-3 py-2 text-left hover:bg-slate-800 transition"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <p className="text-xs font-bold text-white truncate">
+                          {sp.kind === "fore_coffee"
+                            ? "☕ "
+                            : sp.kind === "kopi_kenangan"
+                            ? "❤️ "
+                            : sp.kind === "rental_ps"
+                            ? "🎮 "
+                            : "🍜 "}
+                          {sp.name}
+                        </p>
+                        <p className="text-[10px] text-slate-400 truncate">{sp.subtitle}</p>
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-amber-500/20 px-2 py-1 text-[10px] font-bold text-amber-200">
+                        Ke Lokasi
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Fast Travel */}
               <div className="space-y-1.5">
@@ -323,52 +365,73 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
           {tab === "radio" && (
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-wider text-pink-300">
-                Head Unit Audio • Radio Jakarta Live
+                Jukebox & Radio Jakarta (25+ Lagu Asli)
               </p>
               <JakartaRadioHUD
                 channelIndex={radioChannelIndex}
                 onChangeChannelIndex={onChangeRadioChannel}
                 compact={false}
                 muted={muted}
+                enableAudio={false}
+                extraChannels={extraRadioChannels}
+                onAddChannels={onAddRadioChannels}
               />
             </div>
           )}
 
           {tab === "games" && (
-            <div className="space-y-2.5">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Portal Mini-Games Berhadiah ($)
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-cyan-300">
+                Rental PS5 & Warnet Vinsky (6 Games Berhadiah $)
               </p>
 
-              <button
-                onClick={() => onOpenMinigame("snake")}
-                className="w-full rounded-2xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/70 to-slate-900 p-3.5 text-left hover:border-cyan-400 transition"
-              >
-                <p className="text-sm font-black text-cyan-300">🐍 Neon Cyber Snake</p>
-                <p className="mt-0.5 text-xs text-slate-300">
-                  Game ular cyberpunk klasik dengan hadiah $40 per poin!
-                </p>
-              </button>
-
-              <button
-                onClick={() => onOpenMinigame("fps")}
-                className="w-full rounded-2xl border border-pink-500/40 bg-gradient-to-r from-pink-950/70 to-slate-900 p-3.5 text-left hover:border-pink-400 transition"
-              >
-                <p className="text-sm font-black text-pink-300">🎯 Urban Warzone FPS</p>
-                <p className="mt-0.5 text-xs text-slate-300">
-                  Tembak-tembakan arena 3D melawan gelombang bot bersenjata ($1.500/kill).
-                </p>
-              </button>
-
-              <button
-                onClick={() => onOpenMinigame("drag")}
-                className="w-full rounded-2xl border border-orange-500/40 bg-gradient-to-r from-orange-950/70 to-slate-900 p-3.5 text-left hover:border-orange-400 transition"
-              >
-                <p className="text-sm font-black text-orange-300">🏁 Sentul Drag Race 402m</p>
-                <p className="mt-0.5 text-xs text-slate-300">
-                  Balap drag 402m oper gigi manual + NOS! Hadiah juara $12.000!
-                </p>
-              </button>
+              {[
+                {
+                  id: "ps_penalty" as const,
+                  title: "⚽ PS5 Liga Tarkam Penalty",
+                  desc: "Adu penalti di GBK! Hadiah $3.000/gol + $10.000 juara.",
+                  cls: "border-emerald-500/40 from-emerald-950/70 text-emerald-300",
+                },
+                {
+                  id: "tarkam_fighter" as const,
+                  title: "🥊 PS5 Gelut Betawi Fighter",
+                  desc: "Tanding silat Betawi vs Preman Kota! Hadiah K.O. $15.000.",
+                  cls: "border-pink-500/40 from-pink-950/70 text-pink-300",
+                },
+                {
+                  id: "ojol_rush" as const,
+                  title: "🏍️ Ojol Sudirman Rush",
+                  desc: "Antar Fore Coffee & Kopi Kenangan hindari busway ($300/kopi).",
+                  cls: "border-green-500/40 from-green-950/70 text-green-300",
+                },
+                {
+                  id: "drag" as const,
+                  title: "🏁 Sentul Drag Race 402m",
+                  desc: "Balap drag 402m oper gigi manual + NOS! Hadiah $12.000.",
+                  cls: "border-orange-500/40 from-orange-950/70 text-orange-300",
+                },
+                {
+                  id: "snake" as const,
+                  title: "🐍 Neon Cyber Snake",
+                  desc: "Game ular arcade klasik dengan hadiah $40 per poin!",
+                  cls: "border-cyan-500/40 from-cyan-950/70 text-cyan-300",
+                },
+                {
+                  id: "fps" as const,
+                  title: "🎯 Urban Warzone FPS",
+                  desc: "Tembak-tembakan arena 3D lawan bot bersenjata ($1.500/kill).",
+                  cls: "border-purple-500/40 from-purple-950/70 text-purple-300",
+                },
+              ].map((g) => (
+                <button
+                  key={g.id}
+                  onClick={() => onOpenMinigame(g.id)}
+                  className={`w-full rounded-2xl border bg-gradient-to-r to-slate-900 p-3 text-left transition hover:brightness-110 ${g.cls}`}
+                >
+                  <p className="text-xs font-black">{g.title}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-300">{g.desc}</p>
+                </button>
+              ))}
             </div>
           )}
 

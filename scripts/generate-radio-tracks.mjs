@@ -84,4 +84,31 @@ writeWavTrack(
   [523.25, 659.25, 783.99, 659.25, 880, 783.99, 659.25, 587.33]
 );
 
-console.log("🎵 Generated 3 royalty-free local Jakarta Radio fallback tracks in public/audio/radio/");
+// Gambang Kromong / Kincir-Kincir Betawi upbeat pentatonic fallback
+writeWavTrack(
+  path.join(RADIO_DIR, "kincir-kincir-betawi.wav"),
+  14,
+  122,
+  [146.83, 146.83, 196.0, 220.0, 196.0, 146.83, 164.81, 196.0],
+  [587.33, 659.25, 783.99, 880.0, 783.99, 659.25, 587.33, 493.88]
+);
+
+// Warm Indonesian Pop Ballad (Kahitna / 90s Pop Jakarta) fallback
+writeWavTrack(
+  path.join(RADIO_DIR, "kahitna-romantis.wav"),
+  16,
+  86,
+  [130.81, 110.0, 87.31, 98.0, 130.81, 110.0, 98.0, 98.0],
+  [523.25, 659.25, 587.33, 523.25, 440.0, 523.25, 587.33, 392.0]
+);
+
+// 80s Slow Rock Classic (Heaven style) fallback
+writeWavTrack(
+  path.join(RADIO_DIR, "heaven-slowrock.wav"),
+  16,
+  82,
+  [130.81, 98.0, 110.0, 87.31, 130.81, 98.0, 87.31, 98.0],
+  [523.25, 587.33, 659.25, 783.99, 659.25, 587.33, 523.25, 493.88]
+);
+
+console.log("🎵 Generated 6 royalty-free local Jakarta Radio fallback tracks in public/audio/radio/");

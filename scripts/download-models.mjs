@@ -81,18 +81,16 @@ async function main() {
     { url: `${marketBase}/suv-mainstream.glb`, dest: path.join(CARS_DIR, "suv_real.glb") },
     { url: `${threeBase}/ferrari.glb`, dest: path.join(CARS_DIR, "supercar.glb") },
     { url: `${showroomBase}/yellow_lambo.glb`, dest: path.join(CARS_DIR, "lambo.glb") },
-    { url: `${showroomBase}/rr.glb`, dest: path.join(CARS_DIR, "rr.glb") },
     { url: `${showroomBase}/80s_Car.glb`, dest: path.join(CARS_DIR, "jdm.glb") },
     { url: `${showroomBase}/white_suv.glb`, dest: path.join(CARS_DIR, "white_suv.glb") },
-    { url: `${showroomBase}/blue_car.glb`, dest: path.join(CARS_DIR, "bluebird.glb") },
     { url: `${showroomBase}/police.glb`, dest: path.join(CARS_DIR, "police.glb") },
     { url: `${sketchbookBase}/car.glb`, dest: path.join(CARS_DIR, "car_sb.glb") },
     { url: `${sketchbookBase}/airplane.glb`, dest: path.join(CARS_DIR, "airplane.glb") },
     { url: `${sketchbookBase}/heli.glb`, dest: path.join(CARS_DIR, "heli.glb") },
     { url: `${lowpolyCityBase}/veiculos/onibus.glb`, dest: path.join(CARS_DIR, "transjakarta.glb") },
 
-    // Rigged Animated Characters
-    { url: `${threeBase}/Soldier.glb`, dest: path.join(CHAR_DIR, "Soldier.glb") },
+    // Casual Streetwear Human & Plaza Character
+    { url: `${threeBase}/readyplayer.me.glb`, dest: path.join(CHAR_DIR, "casual_human.glb") },
     { url: `${threeBase}/Michelle.glb`, dest: path.join(CHAR_DIR, "Michelle.glb") },
   ];
 

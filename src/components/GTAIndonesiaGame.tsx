@@ -27,8 +27,12 @@ import {
   BookOpen,
   HelpCircle,
   ImageDown,
+  Coffee,
+  Gamepad2,
+  X,
 } from "lucide-react";
 import {
+  HangoutSpotData,
   JABODETABEK_REGIONS,
   JabodetabekRegionId,
   MapLayoutData,
@@ -58,7 +62,11 @@ import { soundEngine } from "@/game/SoundEngine";
 import { SmartphoneHUD, TimeOfDay } from "./SmartphoneHUD";
 import { MinigameId, MinigamesModal } from "./MinigamesModal";
 import { HowToPlayModal } from "./HowToPlayModal";
-import { JAKARTA_RADIO_CHANNELS, JakartaRadioHUD } from "./JakartaRadioHUD";
+import {
+  JAKARTA_RADIO_CHANNELS,
+  JakartaRadioHUD,
+  RadioChannel,
+} from "./JakartaRadioHUD";
 import {
   GTASanAndreasRadar,
   GTASanAndreasStatusHUD,
@@ -94,8 +102,12 @@ interface PedestrianUnit {
   z: number;
   yaw: number;
   speed: number;
-  sideX: number;
+  role: "walker_ns" | "walker_ew" | "hangout" | "ojol";
+  baseX: number;
+  baseZ: number;
   dir: 1 | -1;
+  panicTimer: number;
+  teloletTimer: number;
 }
 
 interface BulletItem {
@@ -145,6 +157,9 @@ export default function GTAIndonesiaGame() {
   const [activeMinigame, setActiveMinigame] = useState<MinigameId | null>(null);
   const [muted, setMuted] = useState(false);
   const [radioChannelIndex, setRadioChannelIndex] = useState(0);
+  const [extraRadioChannels, setExtraRadioChannels] = useState<RadioChannel[]>([]);
+  const [nearbyHangout, setNearbyHangout] = useState<HangoutSpotData | null>(null);
+  const [activeCafeModal, setActiveCafeModal] = useState<HangoutSpotData | null>(null);
 
   const [inVehicle, setInVehicle] = useState(true);
   const [cameraMode, setCameraMode] = useState<CameraViewMode>("chase");
@@ -288,6 +303,7 @@ export default function GTAIndonesiaGame() {
     raceCheckpoints: THREE.Vector3[];
     raceMarkerMesh: THREE.Mesh | null;
     aiRacers: Array<{ mesh: VehicleInstance; progress: number; speed: number }>;
+    ojolBikes: VehicleInstance[];
   }>({
     scene: null,
     camera: null,
@@ -311,6 +327,7 @@ export default function GTAIndonesiaGame() {
     raceCheckpoints: [],
     raceMarkerMesh: null,
     aiRacers: [],
+    ojolBikes: [],
   });
 
   const simRef = useRef({
@@ -357,6 +374,8 @@ export default function GTAIndonesiaGame() {
     raceActive: false,
     raceCheckpointIdx: 0,
     raceTimer: 0,
+    lastTeloletAt: -99,
+    lastPanicToastAt: -99,
   });
 
   const inputRef = useRef({
@@ -374,11 +393,15 @@ export default function GTAIndonesiaGame() {
 
   useEffect(() => {
     simRef.current.paused =
-      paused || howToPlayOpen || Boolean(activeMinigame) || stage !== "playing";
+      paused ||
+      howToPlayOpen ||
+      Boolean(activeMinigame) ||
+      Boolean(activeCafeModal) ||
+      stage !== "playing";
     if (simRef.current.paused) {
       soundEngine.stopAll();
     }
-  }, [paused, howToPlayOpen, activeMinigame, stage]);
+  }, [paused, howToPlayOpen, activeMinigame, activeCafeModal, stage]);
 
   useEffect(() => {
     simRef.current.cameraMode = cameraMode;
@@ -779,6 +802,60 @@ export default function GTAIndonesiaGame() {
     [buildCityWorld, showToast]
   );
 
+  const enterHangoutSpot = useCallback(
+    (spot: HangoutSpotData) => {
+      if (spot.kind === "rental_ps") {
+        setActiveMinigame("ps_penalty");
+        showToast(`🎮 Masuk ${spot.name} — Pilih 1 dari 6 Game PS5 / Warnet!`);
+      } else {
+        setActiveCafeModal(spot);
+      }
+    },
+    [showToast]
+  );
+
+  const handleTeleportToSpot = useCallback(
+    (spotId: string) => {
+      const spot = engineRefs.current.layout.hangoutSpots?.find((s) => s.id === spotId);
+      if (!spot) return;
+      const laneX = spot.x > 0 ? 8.8 : -8.8;
+      simRef.current.vehX = laneX;
+      simRef.current.vehZ = spot.z;
+      simRef.current.vehYaw = spot.x > 0 ? Math.PI : 0;
+      simRef.current.vehSpeed = 0;
+      simRef.current.camOrbitYaw = spot.x > 0 ? -0.52 : 0.52;
+      simRef.current.camOrbitPitch = 0.14;
+      simRef.current.charX = spot.x + (spot.x > 0 ? -2.2 : 2.2);
+      simRef.current.charZ = spot.z;
+      setPhoneOpen(false);
+      setCalloutText(spot.name);
+      showToast(`📍 Tiba di depan ${spot.name}! Tekan [G] atau klik banner untuk masuk.`);
+    },
+    [showToast]
+  );
+
+  const triggerTelolet = useCallback(() => {
+    soundEngine.playTeloletBasuri();
+    const nowSec = performance.now() * 0.001;
+    const anchorX = simRef.current.inVehicle ? simRef.current.vehX : simRef.current.charX;
+    const anchorZ = simRef.current.inVehicle ? simRef.current.vehZ : simRef.current.charZ;
+    let cheeredCount = 0;
+    for (const ped of engineRefs.current.pedestrians) {
+      if (Math.hypot(ped.x - anchorX, ped.z - anchorZ) < 32) {
+        ped.teloletTimer = 3.6;
+        ped.yaw = Math.atan2(anchorX - ped.x, anchorZ - ped.z);
+        cheeredCount += 1;
+      }
+    }
+    if (cheeredCount > 0 && nowSec - simRef.current.lastTeloletAt > 3.5) {
+      simRef.current.lastTeloletAt = nowSec;
+      setCash((c) => c + 150);
+      showToast("🎺 OM TELOLET OM!! Warga Sudirman kegirangan (+$150 tip)!");
+    } else {
+      showToast("🎺 KLAKSON TELOLET BASURI V3!");
+    }
+  }, [showToast]);
+
   const handleStartGame = useCallback(async () => {
     soundEngine.unlock();
     setStage("loading");
@@ -923,25 +1000,127 @@ export default function GTAIndonesiaGame() {
     scene.add(dancer.group);
 
     const pedestrians: PedestrianUnit[] = [];
-    const pedTints = ["#ec4899", "#0ea5e9", "#f59e0b", "#10b981", "#6366f1", "#ef4444"];
+    const pedTints = [
+      "#ec4899",
+      "#0ea5e9",
+      "#f59e0b",
+      "#10b981",
+      "#6366f1",
+      "#ef4444",
+      "#16a34a",
+      "#a855f7",
+    ];
+    // 1. 14 Sidewalk walkers on Thamrin-Sudirman North-South corridor
     for (let i = 0; i < 14; i++) {
       const pChar = createCharacterMesh({ tintHex: pedTints[i % pedTints.length] });
-      const sideX = i % 2 === 0 ? -13.6 : 13.6;
+      const baseX = i % 2 === 0 ? -13.6 : 13.6;
       const pz = -210 + i * 32;
       const dir: 1 | -1 = i % 3 === 0 ? -1 : 1;
-      pChar.group.position.set(sideX, 0.22, pz);
+      pChar.group.position.set(baseX, 0.22, pz);
       pChar.group.rotation.y = dir > 0 ? 0 : Math.PI;
       scene.add(pChar.group);
       pedestrians.push({
         char: pChar,
-        x: sideX,
+        x: baseX,
         z: pz,
         yaw: dir > 0 ? 0 : Math.PI,
-        speed: 1.8 + (i % 3) * 0.4,
-        sideX,
+        speed: 1.85 + (i % 3) * 0.42,
+        role: "walker_ns",
+        baseX,
+        baseZ: pz,
         dir,
+        panicTimer: 0,
+        teloletTimer: 0,
       });
     }
+
+    // 2. 6 Cross-corridor walkers (Kebon Kacang / Imam Bonjol East-West)
+    for (let i = 0; i < 6; i++) {
+      const pChar = createCharacterMesh({ tintHex: pedTints[(i + 2) % pedTints.length] });
+      const px = -180 + i * 72;
+      const baseZ = i % 2 === 0 ? -12.6 : 12.6;
+      const dir: 1 | -1 = i % 2 === 0 ? 1 : -1;
+      pChar.group.position.set(px, 0.22, baseZ);
+      pChar.group.rotation.y = dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      scene.add(pChar.group);
+      pedestrians.push({
+        char: pChar,
+        x: px,
+        z: baseZ,
+        yaw: dir > 0 ? Math.PI / 2 : -Math.PI / 2,
+        speed: 1.7 + (i % 2) * 0.35,
+        role: "walker_ew",
+        baseX: px,
+        baseZ,
+        dir,
+        panicTimer: 0,
+        teloletTimer: 0,
+      });
+    }
+
+    // 3. 6 lively Cafe & Rental PS Hangout NPCs standing beside patio tables (not clipping tabletops)
+    const hangoutPositions = [
+      { x: 16.4, z: 43.2, yaw: -Math.PI / 2 },
+      { x: 16.6, z: 48.0, yaw: -Math.PI * 0.72 },
+      { x: -16.4, z: -61.2, yaw: Math.PI / 2 },
+      { x: -16.6, z: -65.8, yaw: Math.PI * 0.35 },
+      { x: 16.5, z: 71.2, yaw: -Math.PI / 2 },
+      { x: 16.6, z: 76.2, yaw: -Math.PI * 0.45 },
+    ];
+    hangoutPositions.forEach((hp, i) => {
+      const pChar = createCharacterMesh({ tintHex: pedTints[(i + 4) % pedTints.length] });
+      pChar.group.position.set(hp.x, 0.24, hp.z);
+      pChar.group.rotation.y = hp.yaw;
+      scene.add(pChar.group);
+      pedestrians.push({
+        char: pChar,
+        x: hp.x,
+        z: hp.z,
+        yaw: hp.yaw,
+        speed: 0,
+        role: "hangout",
+        baseX: hp.x,
+        baseZ: hp.z,
+        dir: i % 2 === 0 ? 1 : -1,
+        panicTimer: 0,
+        teloletTimer: 0,
+      });
+    });
+
+    // 4. 2 Ojol Drivers (Green jacket + helmet) + Parked Ojol Bikes near Kopi Kenangan & Fore Coffee
+    const ojolBikes: VehicleInstance[] = [];
+    [
+      { x: 16.0, z: 38.2, bx: 15.6, bz: 36.2, yaw: Math.PI },
+      { x: -16.0, z: -56.2, bx: -15.6, bz: -54.2, yaw: 0 },
+    ].forEach((oj, idx) => {
+      const pChar = createCharacterMesh({ tintHex: "#16a34a", isOjol: true });
+      pChar.group.position.set(oj.x, 0.22, oj.z);
+      pChar.group.rotation.y = oj.yaw;
+      scene.add(pChar.group);
+      pedestrians.push({
+        char: pChar,
+        x: oj.x,
+        z: oj.z,
+        yaw: oj.yaw,
+        speed: 0,
+        role: "ojol",
+        baseX: oj.x,
+        baseZ: oj.z,
+        dir: 1,
+        panicTimer: 0,
+        teloletTimer: 0,
+      });
+
+      const bike = createVehicleMesh("motor", {
+        paintColor: "#16a34a",
+        plateText: `B ${6610 + idx} OJL`,
+      });
+      bike.group.position.set(oj.bx, 0, oj.bz);
+      bike.group.rotation.y = oj.yaw + 0.35;
+      scene.add(bike.group);
+      ojolBikes.push(bike);
+    });
+    engineRefs.current.ojolBikes = ojolBikes;
 
     engineRefs.current.scene = scene;
     engineRefs.current.camera = camera;
@@ -1289,15 +1468,78 @@ export default function GTAIndonesiaGame() {
 
         engineRefs.current.dancer?.update(dt);
         for (const ped of engineRefs.current.pedestrians) {
-          ped.z += ped.dir * ped.speed * dt;
-          if (ped.z > 230) ped.z = -230;
-          if (ped.z < -230) ped.z = 230;
-          if (Math.hypot(ped.x, ped.z) < 22) ped.z += ped.dir * 44;
-          ped.char.group.position.set(ped.sideX, 0.22, ped.z);
+          if (ped.panicTimer > 0) ped.panicTimer = Math.max(0, ped.panicTimer - dt);
+          if (ped.teloletTimer > 0) ped.teloletTimer = Math.max(0, ped.teloletTimer - dt);
+
+          const distPlayer = Math.hypot(ped.x - targetX, ped.z - targetZ);
+          if (
+            ped.panicTimer <= 0 &&
+            ((s.inVehicle && Math.abs(s.vehSpeed) > 15 && distPlayer < 7.5) ||
+              (!s.inVehicle && inp.shoot && distPlayer < 18))
+          ) {
+            ped.panicTimer = 3.5;
+            ped.yaw = Math.atan2(ped.x - targetX, ped.z - targetZ);
+            if (timeSec - simRef.current.lastPanicToastAt > 5) {
+              simRef.current.lastPanicToastAt = timeSec;
+              showToast("😱 Warga: Minggir woy!! Ada yang ngebut / rusuh di Sudirman!");
+            }
+          }
+
+          let animSpeedRatio = 0;
+          if (ped.panicTimer > 0) {
+            const awayYaw = Math.atan2(ped.x - targetX, ped.z - targetZ);
+            ped.yaw = awayYaw;
+            ped.x += Math.sin(awayYaw) * 5.2 * dt;
+            ped.z += Math.cos(awayYaw) * 5.2 * dt;
+            animSpeedRatio = 1.65;
+          } else if (ped.teloletTimer > 0) {
+            ped.yaw = Math.atan2(targetX - ped.x, targetZ - ped.z);
+            animSpeedRatio = 0.25;
+            ped.char.group.position.y = 0.24 + Math.abs(Math.sin(timeSec * 9)) * 0.28;
+          } else if (ped.role === "walker_ns") {
+            const redWait = nsRed && (Math.abs(ped.z - 90) < 16 || Math.abs(ped.z + 90) < 16);
+            if (!redWait) {
+              ped.z += ped.dir * ped.speed * dt;
+              if (ped.z > 240) ped.z = -240;
+              if (ped.z < -240) ped.z = 240;
+              if (Math.hypot(ped.x, ped.z) < 22) ped.z += ped.dir * 44;
+              animSpeedRatio = 0.72;
+            } else {
+              animSpeedRatio = 0;
+            }
+            ped.x += (ped.baseX - ped.x) * Math.min(1, dt * 2.5);
+            ped.yaw = ped.dir > 0 ? 0 : Math.PI;
+            ped.char.group.position.y = 0.22;
+          } else if (ped.role === "walker_ew") {
+            const redWait = ewRed && (Math.abs(ped.x - 90) < 16 || Math.abs(ped.x + 90) < 16);
+            if (!redWait) {
+              ped.x += ped.dir * ped.speed * dt;
+              if (ped.x > 240) ped.x = -240;
+              if (ped.x < -240) ped.x = 240;
+              if (Math.hypot(ped.x, ped.z) < 22) ped.x += ped.dir * 44;
+              animSpeedRatio = 0.72;
+            } else {
+              animSpeedRatio = 0;
+            }
+            ped.z += (ped.baseZ - ped.z) * Math.min(1, dt * 2.5);
+            ped.yaw = ped.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+            ped.char.group.position.y = 0.22;
+          } else {
+            // Hangout / Ojol waiting at cafe or station
+            ped.x += (ped.baseX - ped.x) * Math.min(1, dt * 2.5);
+            ped.z += (ped.baseZ - ped.z) * Math.min(1, dt * 2.5);
+            ped.yaw += Math.sin(timeSec * 0.9 + ped.baseZ) * 0.22 * dt;
+            ped.char.group.position.y = 0.24;
+            animSpeedRatio = 0.04;
+          }
+
+          ped.char.group.position.x = ped.x;
+          ped.char.group.position.z = ped.z;
+          ped.char.group.rotation.y = ped.yaw;
           ped.char.animate({
             dt,
             timeSec,
-            speedRatio: 0.7,
+            speedRatio: animSpeedRatio,
             isJumping: false,
             isSwimming: false,
             isAiming: false,
@@ -1413,6 +1655,10 @@ export default function GTAIndonesiaGame() {
             const chaseSpeed = 24 + s.wantedLevel * 3.5;
             pol.x += (dx / dist) * chaseSpeed * dt;
             pol.z += (dz / dist) * chaseSpeed * dt;
+            // Keep pursuing police vehicles off cafe patios and sidewalks on main avenue
+            if (Math.abs(pol.z) > 16 && Math.abs(pol.x) > 10.5 && Math.abs(pol.x) < 22) {
+              pol.x = Math.sign(pol.x) * 10.5;
+            }
           }
           pol.mesh.group.position.set(pol.x, 0, pol.z);
           pol.mesh.group.rotation.y = pol.yaw;
@@ -1561,6 +1807,17 @@ export default function GTAIndonesiaGame() {
           setArmorPct(Math.round(s.armor));
           setGps(worldToGps(anchorX, anchorZ, engineRefs.current.layout.region));
 
+          let closestSpot: HangoutSpotData | null = null;
+          let bestSpotDist = 14.5;
+          for (const sp of engineRefs.current.layout.hangoutSpots || []) {
+            const d = Math.hypot(anchorX - sp.x, anchorZ - sp.z);
+            if (d < bestSpotDist) {
+              bestSpotDist = d;
+              closestSpot = sp;
+            }
+          }
+          setNearbyHangout(closestSpot);
+
           const activeCp = s.raceActive
             ? engineRefs.current.raceCheckpoints[s.raceCheckpointIdx]
             : null;
@@ -1602,6 +1859,7 @@ export default function GTAIndonesiaGame() {
       engineRefs.current.character?.dispose();
       engineRefs.current.dancer?.dispose();
       engineRefs.current.pedestrians.forEach((p) => p.char.dispose());
+      engineRefs.current.ojolBikes.forEach((b) => b.dispose());
       engineRefs.current.policePool.forEach((p) => p.mesh.dispose());
       engineRefs.current.trafficPool.forEach((t) => t.mesh.dispose());
       engineRefs.current.aiRacers.forEach((r) => r.mesh.dispose());
@@ -1665,8 +1923,21 @@ export default function GTAIndonesiaGame() {
         return;
       }
       if (e.code === "KeyH") {
-        soundEngine.playTeloletBasuri();
-        showToast("🎺 KLAKSON TELOLET BASURI V3!");
+        triggerTelolet();
+        return;
+      }
+      if (e.code === "KeyG") {
+        const anchorX = simRef.current.inVehicle ? simRef.current.vehX : simRef.current.charX;
+        const anchorZ = simRef.current.inVehicle ? simRef.current.vehZ : simRef.current.charZ;
+        const hitSpot = engineRefs.current.layout.hangoutSpots?.find(
+          (sp) => Math.hypot(anchorX - sp.x, anchorZ - sp.z) < 16
+        );
+        if (hitSpot) {
+          enterHangoutSpot(hitSpot);
+        } else {
+          setPhoneOpen(true);
+          showToast("☕ Dekati lingkaran Kafe / Rental PS5 atau klik HP untuk ke lokasi!");
+        }
         return;
       }
       if (e.code === "KeyR") {
@@ -1721,7 +1992,7 @@ export default function GTAIndonesiaGame() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [stage, howToPlayOpen, toggleEnterExitVehicle, showToast]);
+  }, [stage, howToPlayOpen, toggleEnterExitVehicle, triggerTelolet, enterHangoutSpot, showToast]);
 
   const handleJoystickStart = (e: React.TouchEvent<HTMLDivElement>) => {
     const t = e.touches[0];
@@ -2027,22 +2298,46 @@ export default function GTAIndonesiaGame() {
       {/* Top HUD */}
       <div className="pointer-events-none fixed top-0 left-0 right-0 z-20 flex items-start justify-between gap-2 p-2.5 sm:p-4">
         <div className="pointer-events-auto flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-nowrap items-center gap-1 whitespace-nowrap">
             <button
               onClick={() => setPhoneOpen((p) => !p)}
-              className="flex items-center gap-1.5 rounded-xl border border-pink-500/50 bg-gradient-to-r from-pink-600/90 to-orange-500/90 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:brightness-110"
+              className="flex items-center gap-1 rounded-xl border border-pink-500/50 bg-gradient-to-r from-pink-600/90 to-orange-500/90 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-lg hover:brightness-110"
             >
-              <Smartphone className="h-4 w-4" />
+              <Smartphone className="h-3.5 w-3.5" />
               <span>HP / GPS</span>
             </button>
 
             <button
               onClick={handleTakeScreenshot}
-              className="flex items-center gap-1 rounded-xl border border-cyan-400/50 bg-slate-950/80 px-2.5 py-1.5 text-xs font-bold text-cyan-200 hover:bg-cyan-500/30 backdrop-blur-md"
+              className="flex items-center gap-1 rounded-xl border border-cyan-400/50 bg-slate-950/80 px-2 py-1.5 text-[11px] font-bold text-cyan-200 hover:bg-cyan-500/30 backdrop-blur-md"
               title="Ambil Foto / Screenshot Jakarta (.PNG)"
             >
-              <ImageDown className="h-4 w-4" />
-              <span className="hidden md:inline">Screenshot</span>
+              <ImageDown className="h-3.5 w-3.5" />
+              <span className="hidden xl:inline">Foto</span>
+            </button>
+
+            <button
+              onClick={() => {
+                const cafe =
+                  engineRefs.current.layout.hangoutSpots?.find(
+                    (s) => s.kind === "fore_coffee" || s.kind === "kopi_kenangan"
+                  ) ?? null;
+                if (cafe) setActiveCafeModal(cafe);
+              }}
+              className="flex items-center gap-1 rounded-xl border border-emerald-400/50 bg-emerald-950/80 px-2.5 py-1.5 text-[11px] font-bold text-emerald-200 hover:bg-emerald-500/30 backdrop-blur-md"
+              title="Nongkrong Kafe Fore / Kopi Kenangan"
+            >
+              <Coffee className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Kafe</span>
+            </button>
+
+            <button
+              onClick={() => setActiveMinigame("ps_penalty")}
+              className="flex items-center gap-1 rounded-xl border border-pink-400/50 bg-indigo-950/85 px-2.5 py-1.5 text-[11px] font-bold text-pink-200 hover:bg-pink-500/30 backdrop-blur-md"
+              title="Masuk Rental PS5 & Warnet Vinsky (6 Games)"
+            >
+              <Gamepad2 className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">PS5</span>
             </button>
 
             <button
@@ -2050,7 +2345,7 @@ export default function GTAIndonesiaGame() {
               className="rounded-xl border border-amber-400/50 bg-slate-950/80 p-1.5 text-amber-300 hover:bg-amber-500/30 backdrop-blur-md"
               title="Panduan Main & Fitur"
             >
-              <HelpCircle className="h-4 w-4" />
+              <HelpCircle className="h-3.5 w-3.5" />
             </button>
 
             <button
@@ -2062,7 +2357,7 @@ export default function GTAIndonesiaGame() {
               className="rounded-xl border border-white/15 bg-slate-950/80 p-1.5 text-white hover:bg-slate-800 backdrop-blur-md"
               title="Ganti Kamera (C)"
             >
-              <Camera className="h-4 w-4" />
+              <Camera className="h-3.5 w-3.5" />
             </button>
 
             <button
@@ -2074,7 +2369,7 @@ export default function GTAIndonesiaGame() {
               className="rounded-xl border border-white/15 bg-slate-950/80 p-1.5 text-white hover:bg-slate-800 backdrop-blur-md"
               title="Mute / Unmute"
             >
-              {muted ? <VolumeX className="h-4 w-4 text-red-400" /> : <Volume2 className="h-4 w-4" />}
+              {muted ? <VolumeX className="h-3.5 w-3.5 text-red-400" /> : <Volume2 className="h-3.5 w-3.5" />}
             </button>
 
             <button
@@ -2082,7 +2377,7 @@ export default function GTAIndonesiaGame() {
               className="rounded-xl border border-white/15 bg-slate-950/80 p-1.5 text-white hover:bg-slate-800 backdrop-blur-md"
               title="Pause (ESC)"
             >
-              <Pause className="h-4 w-4" />
+              <Pause className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -2091,6 +2386,13 @@ export default function GTAIndonesiaGame() {
             onChangeChannelIndex={setRadioChannelIndex}
             compact
             muted={muted}
+            autoPlayOnMount
+            extraChannels={extraRadioChannels}
+            onAddChannels={(chs) => {
+              const start = JAKARTA_RADIO_CHANNELS.length + extraRadioChannels.length;
+              setExtraRadioChannels((prev) => [...prev, ...chs]);
+              return start;
+            }}
           />
 
           {raceStatus.active && (
@@ -2117,7 +2419,7 @@ export default function GTAIndonesiaGame() {
             }}
           />
 
-          <div className="rounded-lg bg-slate-950/75 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-300 backdrop-blur-sm border border-white/15 shadow">
+          <div className="whitespace-nowrap rounded-lg bg-slate-950/75 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-300 backdrop-blur-sm border border-white/15 shadow">
             GTA Indonesia • <CreatorLink />
           </div>
         </div>
@@ -2172,20 +2474,49 @@ export default function GTAIndonesiaGame() {
         </div>
       )}
 
-      {toastMsg && (
-        <div className="pointer-events-none fixed top-28 left-1/2 z-30 -translate-x-1/2 rounded-2xl border border-pink-500/40 bg-slate-950/90 px-4 py-2 text-center text-xs sm:text-sm font-bold text-white shadow-2xl backdrop-blur-md">
+      {nearbyHangout && !activeCafeModal && !activeMinigame && (
+        <div
+          className={`fixed left-1/2 z-30 -translate-x-1/2 ${
+            resolvedMobile ? "bottom-52" : "bottom-20"
+          }`}
+        >
+          <button
+            onClick={() => enterHangoutSpot(nearbyHangout)}
+            className={`animate-bounce flex items-center gap-2 rounded-full border px-5 py-2.5 text-xs sm:text-sm font-black text-white shadow-2xl backdrop-blur-md transition hover:scale-105 ${
+              nearbyHangout.kind === "rental_ps"
+                ? "border-cyan-300 bg-gradient-to-r from-indigo-600/95 to-pink-600/95"
+                : "border-emerald-300 bg-gradient-to-r from-emerald-600/95 to-teal-700/95"
+            }`}
+          >
+            {nearbyHangout.kind === "rental_ps" ? (
+              <Gamepad2 className="h-4 w-4" />
+            ) : (
+              <Coffee className="h-4 w-4" />
+            )}
+            <span>
+              [G / Klik]{" "}
+              {nearbyHangout.kind === "rental_ps"
+                ? `Masuk ${nearbyHangout.name} (6 Games)`
+                : `Nongkrong di ${nearbyHangout.name}`}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {toastMsg && !showOnboardingTip && (
+        <div className="pointer-events-none fixed bottom-36 left-1/2 z-30 w-fit max-w-sm -translate-x-1/2 rounded-2xl border border-pink-500/40 bg-slate-950/90 px-4 py-2 text-center text-xs sm:text-sm font-bold text-white shadow-2xl backdrop-blur-md">
           {toastMsg}
         </div>
       )}
 
       {!resolvedMobile && (
         <>
-          <div className="pointer-events-none fixed bottom-4 left-44 z-20 rounded-2xl border border-white/15 bg-slate-950/75 px-3 py-2 text-[10px] text-slate-300 backdrop-blur-md space-y-0.5">
+          <div className="pointer-events-none fixed bottom-4 left-44 right-56 z-20 w-fit max-w-[calc(100vw-400px)] rounded-2xl border border-white/15 bg-slate-950/75 px-3 py-2 text-[10px] text-slate-300 backdrop-blur-md space-y-0.5">
             <p className="font-bold text-amber-300">
               💻 Drag Mouse: Kamera 360° • 1-5: Senjata • F: Carjack/Turun
             </p>
             <p>
-              WASD: Setir/Jalan • Space: Drift/Lompat • Shift: Nitro • C: Kamera • H: Telolet • R: Radio • P: HP
+              WASD: Setir/Jalan • Space: Drift/Lompat • Shift: Nitro • G: Kafe/PS5 • H: Telolet • R: Radio • P: HP
             </p>
           </div>
 
@@ -2265,10 +2596,7 @@ export default function GTAIndonesiaGame() {
                 <ChevronRight className="h-4 w-4" />
               </button>
               <button
-                onClick={() => {
-                  soundEngine.playTeloletBasuri();
-                  showToast("🎺 TELOLET BASURI!");
-                }}
+                onClick={triggerTelolet}
                 className="rounded-xl border border-amber-400/50 bg-amber-500/30 px-3 py-2 text-xs font-black text-amber-200 active:scale-95"
               >
                 Telolet
@@ -2348,7 +2676,15 @@ export default function GTAIndonesiaGame() {
         wantedLevel={wantedLevel}
         radioChannelIndex={radioChannelIndex}
         muted={muted}
+        extraRadioChannels={extraRadioChannels}
+        hangoutSpots={engineRefs.current.layout.hangoutSpots}
+        onAddRadioChannels={(chs) => {
+          const start = JAKARTA_RADIO_CHANNELS.length + extraRadioChannels.length;
+          setExtraRadioChannels((prev) => [...prev, ...chs]);
+          return start;
+        }}
         onChangeRadioChannel={setRadioChannelIndex}
+        onTeleportToSpot={handleTeleportToSpot}
         onTakeScreenshot={handleTakeScreenshot}
         onFastTravel={handleFastTravel}
         onSpawnVehicle={(kind) => {
@@ -2419,6 +2755,138 @@ export default function GTAIndonesiaGame() {
           setActiveMinigame(id);
         }}
       />
+
+      {activeCafeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-5">
+          <div className="relative w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl border border-emerald-400/45 bg-slate-950/95 p-5 sm:p-6 text-white shadow-2xl space-y-4">
+            <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-3">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-wider text-emerald-300">
+                  SPOT NONGKRONG JAKARTA
+                </p>
+                <h2 className="text-xl sm:text-2xl font-black text-white">
+                  ☕ {activeCafeModal.name}
+                </h2>
+                <p className="text-xs text-slate-300 mt-0.5">{activeCafeModal.subtitle}</p>
+              </div>
+              <button
+                onClick={() => setActiveCafeModal(null)}
+                className="rounded-xl bg-white/10 p-2 hover:bg-red-500 transition"
+                aria-label="Tutup Kafe"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Obrolan NPC Tongkrongan */}
+            <div className="rounded-2xl border border-white/10 bg-slate-900/90 p-3.5 space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                💬 Obrolan Tongkrongan Sudirman
+              </p>
+              <div className="space-y-1.5 text-xs">
+                <p className="rounded-xl bg-white/5 px-3 py-2 text-slate-200">
+                  <strong className="text-emerald-300">Barista Kafe:</strong> &ldquo;Silakan kak! Lagi promo Butterscotch Latte sama Es Kopi Kenangan Mantan nih buat nambah HP &amp; Nitro!&rdquo;
+                </p>
+                <p className="rounded-xl bg-white/5 px-3 py-2 text-slate-200">
+                  <strong className="text-cyan-300">Anak Komunitas CDID:</strong> &ldquo;Gokil bro mobilnya! Nanti malem ikut drag race di Sentul atau mabar PS5 sebelah ya?&rdquo;
+                </p>
+                <p className="rounded-xl bg-white/5 px-3 py-2 text-slate-200">
+                  <strong className="text-pink-300">Abang Ojol:</strong> &ldquo;Gass bang orderan kopi lagi rame, hati-hati jalur TransJakarta Bundaran HI!&rdquo;
+                </p>
+              </div>
+            </div>
+
+            {/* Menu Minuman & Makanan */}
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                Pesan Menu Nongkrong (Pulihkan 100% HP, Armor & Nitro)
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {[
+                  {
+                    title: "Butterscotch Sea Salt Latte (Fore)",
+                    price: 180,
+                    bonus: "HP 100% + Armor +25%",
+                  },
+                  {
+                    title: "Es Kopi Kenangan Mantan",
+                    price: 140,
+                    bonus: "HP 100% + Nitro 100%",
+                  },
+                  {
+                    title: "Indomie Telor Kornet + Es Teh",
+                    price: 100,
+                    bonus: "HP + Armor 100% Penuh",
+                  },
+                  {
+                    title: "Sate Taichan 10 Tusuk + Aren Latte",
+                    price: 220,
+                    bonus: "HP + Armor + Nitro 100%",
+                  },
+                ].map((menu) => (
+                  <button
+                    key={menu.title}
+                    onClick={() => {
+                      if (cash < menu.price) {
+                        showToast(`Uang kurang ($${menu.price}). Tarik Ojol atau main di Rental PS5!`);
+                        return;
+                      }
+                      setCash((c) => c - menu.price);
+                      simRef.current.health = 100;
+                      simRef.current.armor = 100;
+                      simRef.current.nitro = 100;
+                      setHealthPct(100);
+                      setArmorPct(100);
+                      setNitroPct(100);
+                      soundEngine.playCashReward();
+                      showToast(`☕ Pesan ${menu.title}: ${menu.bonus}!`);
+                    }}
+                    className="rounded-2xl border border-emerald-500/35 bg-slate-900 p-3 text-left hover:border-emerald-400 hover:bg-emerald-950/40 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white">{menu.title}</span>
+                      <span className="rounded-lg bg-emerald-500/25 px-2 py-0.5 text-[11px] font-black text-emerald-300">
+                        ${menu.price}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[10px] text-cyan-300">{menu.bonus}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Switch to Fore / Kopi Kenangan / Rental PS5 or Play Cafe Music */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    setRadioChannelIndex((idx) => (idx + 1) % JAKARTA_RADIO_CHANNELS.length);
+                    showToast("🎵 Ganti lagu nongkrong kafe!");
+                  }}
+                  className="rounded-xl bg-pink-600/80 px-3.5 py-2 text-xs font-bold hover:bg-pink-500"
+                >
+                  🎵 Ganti Lagu Kafe
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveCafeModal(null);
+                    setActiveMinigame("ps_penalty");
+                  }}
+                  className="rounded-xl bg-indigo-600/85 px-3.5 py-2 text-xs font-bold hover:bg-indigo-500"
+                >
+                  🎮 Ke Rental PS5 Sebelah
+                </button>
+              </div>
+              <button
+                onClick={() => setActiveCafeModal(null)}
+                className="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-black hover:bg-emerald-500"
+              >
+                Cabut &amp; Lanjut Keliling
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeMinigame && (
         <MinigamesModal

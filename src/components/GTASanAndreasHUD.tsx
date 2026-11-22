@@ -201,6 +201,19 @@ export const GTASanAndreasRadar: React.FC<GTASanAndreasRadarProps> = ({
       ctx.fillRect(sx - 4, sz - 4, 8, 8);
     }
 
+    // Kafe Nongkrong (Fore / Kopi Kenangan) & Rental PS5 / Warnet Blips
+    for (const spot of layout.hangoutSpots || []) {
+      const hx = (spot.x - playerX) * scale;
+      const hz = (spot.z - playerZ) * scale;
+      ctx.fillStyle = spot.kind === "rental_ps" ? "#00f0ff" : "#f59e0b";
+      ctx.beginPath();
+      ctx.arc(hx, hz, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#09090b";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
     // Race Checkpoint Blip (Pink/Yellow circle)
     if (raceTarget) {
       const rx = (raceTarget.x - playerX) * scale;

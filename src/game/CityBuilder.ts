@@ -6,12 +6,15 @@ import {
   getBikeLaneTexture,
   getBuswayTexture,
   getHalteSignTexture,
+  getHangoutBannerTexture,
+  getMrtSignTexture,
   getRukoTexture,
   getSeparatorCurbTexture,
   getSidewalkCurbTexture,
   getSkyscraperTexture,
   getSpbuTexture,
   getTollSignTexture,
+  RukoBrandType,
 } from "./IndonesianTextureGenerator";
 
 export interface BuildingCollider {
@@ -279,7 +282,8 @@ function buildRealisticJakartaRuko(
   isNight: boolean
 ): THREE.Group {
   const g = new THREE.Group();
-  const rukoKind = b.kind === "mall" ? "minimarket" : (b.kind as "minimarket" | "bengkel" | "warung");
+  const rukoKind: RukoBrandType =
+    b.kind === "mall" ? "minimarket" : (b.kind as RukoBrandType);
   const tex = getRukoTexture(rukoKind, isNight);
 
   const wallMat = new THREE.MeshStandardMaterial({
@@ -716,6 +720,9 @@ export function buildJakartaCityScene(
       : buildRealisticJakartaRuko(b, isNight);
 
     built.position.set(b.x, 0, b.z);
+    if (!isTall && Math.abs(b.x) < 40) {
+      built.rotation.y = b.x > 0 ? -Math.PI / 2 : Math.PI / 2;
+    }
     worldGroup.add(built);
     cullableProps.push(built);
 
@@ -726,6 +733,164 @@ export function buildJakartaCityScene(
       maxZ: b.z + b.depth / 2,
       height: b.height,
     });
+  });
+
+  // 7b. Hangout Patios (Fore Coffee, Kopi Kenangan, Rental PS5 & Warnet 24 Jam, Warkop)
+  (layout.hangoutSpots || []).forEach((spot) => {
+    const patio = new THREE.Group();
+    patio.position.set(spot.x, 0, spot.z);
+    const faceSign = spot.buildingX > 0 ? -1 : 1;
+
+    const accentHex =
+      spot.kind === "fore_coffee"
+        ? 0x059669
+        : spot.kind === "kopi_kenangan"
+        ? 0xdc2626
+        : spot.kind === "rental_ps"
+        ? 0x06b6d4
+        : 0xea580c;
+
+    // Cafe wooden terrace floor / arcade neon floor
+    const floorMat = new THREE.MeshStandardMaterial({
+      color: spot.kind === "rental_ps" ? 0x1e1b4b : 0x78350f,
+      roughness: 0.78,
+    });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.14, 9.2), floorMat);
+    deck.position.y = 0.07;
+    deck.receiveShadow = true;
+    patio.add(deck);
+
+    // Outdoor Cafe Tables + Parasols OR Neon PS5/Warnet Arch
+    if (spot.kind === "rental_ps") {
+      const neonMat = new THREE.MeshBasicMaterial({ color: 0xec4899 });
+      const cyanMat = new THREE.MeshBasicMaterial({ color: 0x22d3ee });
+      [-3.8, 3.8].forEach((tz) => {
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.8, 0.28), cyanMat);
+        pillar.position.set(faceSign * 1.4, 1.9, tz);
+        patio.add(pillar);
+      });
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.32, 8.2), neonMat);
+      beam.position.set(faceSign * 1.4, 3.8, 0);
+      patio.add(beam);
+    } else {
+      const umbrellaMat = new THREE.MeshStandardMaterial({
+        color: accentHex,
+        roughness: 0.55,
+      });
+      const woodMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.7 });
+      [-2.4, 2.4].forEach((tz) => {
+        const pole = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.05, 0.05, 2.55, 8),
+          new THREE.MeshStandardMaterial({ color: 0xd4d4d8, metalness: 0.6 })
+        );
+        pole.position.set(faceSign * 0.4, 1.35, tz);
+        const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.45, 0.55, 10), umbrellaMat);
+        canopy.position.set(faceSign * 0.4, 2.7, tz);
+        canopy.castShadow = true;
+        const table = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.08, 12), woodMat);
+        table.position.set(faceSign * 0.4, 0.85, tz);
+        patio.add(pole, canopy, table);
+
+        [-0.85, 0.85].forEach((cz) => {
+          const stool = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.22, 0.2, 0.52, 8),
+            umbrellaMat
+          );
+          stool.position.set(faceSign * 0.4, 0.34, tz + cz);
+          patio.add(stool);
+        });
+      });
+    }
+
+    // Prominent illuminated Totem Banner anchored neatly beside storefront facade
+    const bannerTex = getHangoutBannerTexture(spot.name, spot.subtitle.slice(0, 38), spot.kind);
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.14, 5.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6 })
+    );
+    pole.position.set(-faceSign * 1.2, 2.6, 0);
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(0.28, 1.35, 4.4),
+      new THREE.MeshStandardMaterial({
+        map: bannerTex,
+        emissive: new THREE.Color(accentHex),
+        emissiveIntensity: 0.25,
+      })
+    );
+    board.position.set(-faceSign * 1.2, 5.1, 0);
+    patio.add(pole, board);
+
+    // Interactive glowing ground marker ring
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(2.1, 2.65, 32),
+      new THREE.MeshBasicMaterial({
+        color: spot.kind === "rental_ps" ? 0x22d3ee : accentHex,
+        side: THREE.DoubleSide,
+      })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(faceSign * 2.1, 0.1, 0);
+    patio.add(ring);
+
+    worldGroup.add(patio);
+    cullableProps.push(patio);
+
+    // Keep vehicles out of the cafe terrace deck & umbrellas
+    colliders.push({
+      minX: spot.x - 1.9,
+      maxX: spot.x + 1.9,
+      minZ: spot.z - 4.5,
+      maxZ: spot.z + 4.5,
+      height: 3.0,
+    });
+  });
+
+  // 7c. Stasiun MRT Jakarta Underground Entrances
+  (layout.mrtStations || []).forEach((mrt) => {
+    const g = new THREE.Group();
+    g.position.set(mrt.x, 0, mrt.z);
+    if (mrt.x > 0) g.rotation.y = Math.PI;
+
+    const steelMat = new THREE.MeshStandardMaterial({
+      color: 0xe2e8f0,
+      metalness: 0.75,
+      roughness: 0.25,
+    });
+    const glassRoofMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0284c7,
+      transparent: true,
+      opacity: 0.55,
+      roughness: 0.08,
+      clearcoat: 1.0,
+    });
+    const darkHoleMat = new THREE.MeshStandardMaterial({ color: 0x09090b, roughness: 0.9 });
+
+    const floorVoid = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.2, 8.6), darkHoleMat);
+    floorVoid.position.y = 0.08;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.22, 9.4), glassRoofMat);
+    roof.position.set(0, 3.6, 0);
+    roof.rotation.z = -0.14;
+
+    [-4.1, 4.1].forEach((pz) => {
+      const colL = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 3.6, 8), steelMat);
+      colL.position.set(-1.6, 1.8, pz);
+      const colR = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 3.3, 8), steelMat);
+      colR.position.set(1.6, 1.65, pz);
+      g.add(colL, colR);
+    });
+
+    const signBoard = new THREE.Mesh(
+      new THREE.BoxGeometry(0.24, 1.1, 7.8),
+      new THREE.MeshStandardMaterial({
+        map: getMrtSignTexture(mrt.name),
+        emissive: new THREE.Color(0x0369a1),
+        emissiveIntensity: 0.35,
+      })
+    );
+    signBoard.position.set(1.75, 3.45, 0);
+    g.add(floorVoid, roof, signBoard);
+    worldGroup.add(g);
+    cullableProps.push(g);
   });
 
   // 8. SPBU Pertamina Fuel & Repair Stations
@@ -793,28 +958,36 @@ export function buildJakartaCityScene(
   });
 
   // 10. Real 3D .GLB Tropical Palm Trees, Angsana Trees & Streetlights along Sidewalks
+  const hitsObstacle = (px: number, pz: number) =>
+    (layout.hangoutSpots || []).some((s) => Math.hypot(s.x - px, s.z - pz) < 16) ||
+    (layout.mrtStations || []).some((m) => Math.hypot(m.x - px, m.z - pz) < 15) ||
+    (layout.jpoLocations || []).some((j) => Math.hypot(j.x - px, j.z - pz) < 18) ||
+    (layout.spbuStations || []).some((sp) => Math.hypot(sp.x - px, sp.z - pz) < 18);
+
   for (let z = -260; z <= 260; z += 36) {
     if (Math.abs(z) < 38) continue;
     [-14.5, 14.5].forEach((x, sideIdx) => {
-      const poste = getCachedCityAsset("poste_luz.glb");
-      if (poste) {
-        const fittedPoste = fitAssetToBox(poste, 1.4, 7.2, 1.4, true);
-        fittedPoste.position.set(x, 0, z);
-        if (x > 0) fittedPoste.rotation.y = Math.PI;
-        worldGroup.add(fittedPoste);
-        cullableProps.push(fittedPoste);
+      if (!hitsObstacle(x, z)) {
+        const poste = getCachedCityAsset("poste_luz.glb");
+        if (poste) {
+          const fittedPoste = fitAssetToBox(poste, 1.4, 7.2, 1.4, true);
+          fittedPoste.position.set(x, 0, z);
+          if (x > 0) fittedPoste.rotation.y = Math.PI;
+          worldGroup.add(fittedPoste);
+          cullableProps.push(fittedPoste);
+        }
       }
 
+      const treeX = x + (x < 0 ? -2.2 : 2.2);
+      const treeZ = z + 15;
+      if (hitsObstacle(treeX, treeZ)) return;
+
       const treeName =
-        (Math.abs(z) + sideIdx) % 3 === 0
-          ? "buriti.glb"
-          : (Math.abs(z) + sideIdx) % 3 === 1
-          ? "ipe_amarelo.glb"
-          : "grass-trees-tall.glb";
+        (Math.abs(z) + sideIdx) % 2 === 0 ? "buriti.glb" : "ipe_amarelo.glb";
       const treeModel = getCachedCityAsset(treeName);
       if (treeModel) {
-        const fittedTree = fitAssetToBox(treeModel, 4.8, 7.8, 4.8, true);
-        fittedTree.position.set(x + (x < 0 ? -2.2 : 2.2), 0, z + 15);
+        const fittedTree = fitAssetToBox(treeModel, 4.4, 7.8, 4.4, true);
+        fittedTree.position.set(treeX, 0, treeZ);
         worldGroup.add(fittedTree);
         cullableProps.push(fittedTree);
       }

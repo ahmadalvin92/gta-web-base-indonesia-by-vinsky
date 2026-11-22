@@ -286,7 +286,6 @@ export const CITY_ASSET_FILES = [
   "ponte.glb",
   "buriti.glb",
   "ipe_amarelo.glb",
-  "grass-trees-tall.glb",
   "pavement-fountain.glb",
   "posto_recarga.glb",
 ];
@@ -357,7 +356,7 @@ export async function preloadAllGameModels(
   onProgress?: (pct: number, label: string) => void
 ): Promise<void> {
   const urls = new Set<string>();
-  urls.add("/models/characters/Soldier.glb");
+  urls.add("/models/characters/casual_human.glb");
   urls.add("/models/characters/Michelle.glb");
 
   const startSpec = VEHICLE_SPECS.find((s) => s.id === startVehicleKind);
@@ -819,59 +818,60 @@ export interface CharacterInstance {
   dispose: () => void;
 }
 
-export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInstance {
+export function createCharacterMesh(opts?: {
+  tintHex?: string;
+  isOjol?: boolean;
+}): CharacterInstance {
   const group = new THREE.Group();
-  const soldierCache = gltfCache.get("/models/characters/Soldier.glb");
-
-  let mixer: THREE.AnimationMixer | null = null;
-  let idleAction: THREE.AnimationAction | null = null;
-  let walkAction: THREE.AnimationAction | null = null;
-  let runAction: THREE.AnimationAction | null = null;
-  let currentAction: THREE.AnimationAction | null = null;
+  const humanCache = gltfCache.get("/models/characters/casual_human.glb");
 
   const weaponMesh = new THREE.Group();
   const rifleBody = new THREE.Mesh(
     new THREE.BoxGeometry(0.06, 0.14, 0.52),
     new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.7, roughness: 0.3 })
   );
-  rifleBody.position.set(0.26, 1.25, 0.36);
+  rifleBody.position.set(0.24, 1.25, 0.38);
   weaponMesh.add(rifleBody);
   weaponMesh.visible = false;
   group.add(weaponMesh);
 
-  if (soldierCache) {
-    const model = SkeletonUtils.clone(soldierCache.scene) as THREE.Group;
-    model.rotation.y = Math.PI;
+  let model: THREE.Group | null = null;
+  const bones = new Map<string, { node: THREE.Object3D; rest: THREE.Quaternion }>();
+
+  if (humanCache) {
+    model = SkeletonUtils.clone(humanCache.scene) as THREE.Group;
     model.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const m = child as THREE.Mesh;
         m.castShadow = true;
         m.receiveShadow = true;
-        if (opts?.tintHex && m.material && !Array.isArray(m.material)) {
+        if (m.material && !Array.isArray(m.material)) {
           const clonedMat = m.material.clone() as THREE.MeshStandardMaterial;
-          clonedMat.color.lerp(new THREE.Color(opts.tintHex), 0.38);
+          const mName = (clonedMat.name || "").toLowerCase();
+          if (opts?.tintHex && mName.includes("outfit_top")) {
+            clonedMat.color.lerp(new THREE.Color(opts.tintHex), opts.isOjol ? 0.88 : 0.65);
+          } else if (opts?.isOjol && mName.includes("headwear")) {
+            clonedMat.color.set("#16a34a");
+          }
           m.material = clonedMat;
         }
       }
+      if (
+        [
+          "Spine",
+          "Head",
+          "LeftArm",
+          "RightArm",
+          "LeftUpLeg",
+          "RightUpLeg",
+          "LeftLeg",
+          "RightLeg",
+        ].includes(child.name)
+      ) {
+        bones.set(child.name, { node: child, rest: child.quaternion.clone() });
+      }
     });
     group.add(model);
-
-    if (soldierCache.animations.length > 0) {
-      mixer = new THREE.AnimationMixer(model);
-      const findClip = (name: string) =>
-        soldierCache.animations.find((c) => c.name.toLowerCase() === name.toLowerCase());
-
-      const idleClip = findClip("Idle") || soldierCache.animations[0];
-      const walkClip = findClip("Walk") || idleClip;
-      const runClip = findClip("Run") || walkClip;
-
-      idleAction = mixer.clipAction(idleClip);
-      walkAction = mixer.clipAction(walkClip);
-      runAction = mixer.clipAction(runClip);
-
-      idleAction.play();
-      currentAction = idleAction;
-    }
   } else {
     const body = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.24, 0.9, 6, 10),
@@ -882,13 +882,12 @@ export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInsta
   }
 
   let isSitting = false;
-
-  const switchAction = (next: THREE.AnimationAction | null) => {
-    if (!next || next === currentAction) return;
-    currentAction?.fadeOut(0.18);
-    next.reset().fadeIn(0.18).play();
-    currentAction = next;
-  };
+  let walkPhase = 0;
+  const axisX = new THREE.Vector3(1, 0, 0);
+  const axisY = new THREE.Vector3(0, 1, 0);
+  const axisZ = new THREE.Vector3(0, 0, 1);
+  const qTmp1 = new THREE.Quaternion();
+  const qTmp2 = new THREE.Quaternion();
 
   return {
     group,
@@ -901,24 +900,67 @@ export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInsta
       } else {
         group.visible = true;
         group.scale.setScalar(1.0);
-        switchAction(idleAction);
       }
     },
     animate: ({ dt, timeSec, speedRatio, isSwimming, isAiming }) => {
       if (isSitting) return;
       weaponMesh.visible = isAiming;
 
-      if (mixer) {
-        if (speedRatio > 1.15) switchAction(runAction);
-        else if (speedRatio > 0.12) switchAction(walkAction);
-        else switchAction(idleAction);
-        mixer.update(dt);
+      if (model) {
+        const moving = speedRatio > 0.12;
+        if (moving) {
+          walkPhase += dt * (speedRatio > 1.1 ? 11.5 : 7.2);
+        }
+        const stride = moving ? Math.sin(walkPhase) * (speedRatio > 1.1 ? 0.62 : 0.42) : 0;
+        const absStride = moving ? Math.abs(Math.sin(walkPhase)) : 0;
+
+        model.position.y = moving ? absStride * 0.045 : 0;
+
+        const lThigh = bones.get("LeftUpLeg");
+        const rThigh = bones.get("RightUpLeg");
+        const lKnee = bones.get("LeftLeg");
+        const rKnee = bones.get("RightLeg");
+        const lArm = bones.get("LeftArm");
+        const rArm = bones.get("RightArm");
+        const spine = bones.get("Spine");
+        const head = bones.get("Head");
+
+        if (lThigh) lThigh.node.quaternion.copy(lThigh.rest).multiply(qTmp1.setFromAxisAngle(axisX, stride));
+        if (rThigh) rThigh.node.quaternion.copy(rThigh.rest).multiply(qTmp1.setFromAxisAngle(axisX, -stride));
+        if (lKnee) {
+          const bend = moving ? Math.max(0, -Math.cos(walkPhase)) * 0.55 : 0;
+          lKnee.node.quaternion.copy(lKnee.rest).multiply(qTmp1.setFromAxisAngle(axisX, -bend));
+        }
+        if (rKnee) {
+          const bend = moving ? Math.max(0, Math.cos(walkPhase)) * 0.55 : 0;
+          rKnee.node.quaternion.copy(rKnee.rest).multiply(qTmp1.setFromAxisAngle(axisX, -bend));
+        }
+
+        // Tuck arms comfortably beside body (0.42 rad) + swing naturally opposite legs when walking
+        if (lArm) {
+          qTmp1.setFromAxisAngle(axisX, 0.42);
+          qTmp2.setFromAxisAngle(axisZ, -stride * 0.85);
+          lArm.node.quaternion.copy(lArm.rest).multiply(qTmp1).multiply(qTmp2);
+        }
+        if (rArm) {
+          qTmp1.setFromAxisAngle(axisX, isAiming ? 0.1 : 0.42);
+          qTmp2.setFromAxisAngle(axisZ, isAiming ? -1.1 : -stride * 0.85);
+          rArm.node.quaternion.copy(rArm.rest).multiply(qTmp1).multiply(qTmp2);
+        }
+
+        if (spine) {
+          const sway = moving ? Math.cos(walkPhase) * 0.04 : Math.sin(timeSec * 1.8) * 0.02;
+          spine.node.quaternion.copy(spine.rest).multiply(qTmp1.setFromAxisAngle(axisY, sway));
+        }
+        if (head && !moving) {
+          const look = Math.sin(timeSec * 1.1) * 0.14;
+          head.node.quaternion.copy(head.rest).multiply(qTmp1.setFromAxisAngle(axisY, look));
+        }
       }
 
       group.rotation.x = isSwimming ? 0.45 + Math.sin(timeSec * 5) * 0.08 : 0;
     },
     dispose: () => {
-      mixer?.stopAllAction();
       group.traverse((obj) => {
         if ((obj as THREE.Mesh).isMesh) {
           const m = obj as THREE.Mesh;

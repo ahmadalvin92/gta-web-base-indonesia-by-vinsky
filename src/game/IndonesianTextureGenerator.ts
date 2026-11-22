@@ -225,36 +225,144 @@ export function getSkyscraperTexture(
   return registerTexture(key, canvas, { repeatX: 1, repeatY: 2 });
 }
 
+export type RukoBrandType =
+  | "minimarket"
+  | "bengkel"
+  | "warung"
+  | "fore_coffee"
+  | "kopi_kenangan"
+  | "rental_ps"
+  | "lawson_family";
+
 export function getRukoTexture(
-  type: "minimarket" | "bengkel" | "warung",
+  type: RukoBrandType,
   isNight: boolean
 ): THREE.CanvasTexture {
   const key = `ruko3_jkt_${type}_${isNight ? "night" : "day"}`;
   if (textureCache.has(key)) return textureCache.get(key)!;
 
   const { canvas, ctx } = createCanvas(256, 384);
-  // 3-story cream/warm concrete Indonesian Ruko facade (observed in street references)
-  ctx.fillStyle = isNight ? "#3f3f46" : "#e7e2d8";
+  // 3-story cream/warm concrete Indonesian Ruko facade
+  ctx.fillStyle =
+    type === "rental_ps"
+      ? "#111827"
+      : type === "kopi_kenangan"
+      ? "#1c1917"
+      : isNight
+      ? "#3f3f46"
+      : "#e7e2d8";
   ctx.fillRect(0, 0, 256, 384);
 
   // Structural concrete columns
-  ctx.fillStyle = isNight ? "#27272a" : "#bdb5a6";
+  ctx.fillStyle =
+    type === "fore_coffee"
+      ? "#064e3b"
+      : type === "rental_ps"
+      ? "#312e81"
+      : isNight
+      ? "#27272a"
+      : "#bdb5a6";
   ctx.fillRect(0, 0, 16, 384);
   ctx.fillRect(240, 0, 16, 384);
 
   // 3rd Floor & 2nd Floor aluminum framed windows
   [28, 128].forEach((yPos) => {
-    ctx.fillStyle = isNight ? "#fde68a" : "#334155";
+    ctx.fillStyle =
+      type === "rental_ps"
+        ? "#0ea5e9"
+        : isNight
+        ? "#fde68a"
+        : "#334155";
     ctx.fillRect(28, yPos, 86, 56);
     ctx.fillRect(142, yPos, 86, 56);
-    ctx.strokeStyle = "#18181b";
+    ctx.strokeStyle = type === "rental_ps" ? "#ec4899" : "#18181b";
     ctx.lineWidth = 3;
     ctx.strokeRect(28, yPos, 86, 56);
     ctx.strokeRect(142, yPos, 86, 56);
   });
 
   // Ground floor canopy & brand fascia
-  if (type === "minimarket") {
+  if (type === "fore_coffee") {
+    ctx.fillStyle = "#065f46";
+    ctx.fillRect(0, 204, 256, 54);
+    ctx.fillStyle = "#d9f99d";
+    ctx.fillRect(0, 258, 256, 6);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("FORE COFFEE", 128, 232);
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = "#a7f3d0";
+    ctx.fillText("FORESUMMER • BUTTERSCOTCH LATTE", 128, 250);
+    // Warm sunlit glass cafe front with hanging Edison lights
+    ctx.fillStyle = "#f59e0b";
+    ctx.fillRect(22, 272, 212, 112);
+    ctx.fillStyle = "rgba(15,23,42,0.72)";
+    ctx.fillRect(28, 278, 200, 98);
+    ctx.fillStyle = "#fde68a";
+    [60, 105, 150, 195].forEach((lx) => {
+      ctx.beginPath();
+      ctx.arc(lx, 296, 6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  } else if (type === "kopi_kenangan") {
+    ctx.fillStyle = "#18181b";
+    ctx.fillRect(0, 204, 256, 54);
+    ctx.fillStyle = "#dc2626";
+    ctx.fillRect(0, 254, 256, 10);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 21px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("♥ KOPI KENANGAN", 128, 232);
+    ctx.fillStyle = "#fca5a5";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillText("ES KOPI KENANGAN MANTAN • 24H", 128, 249);
+    ctx.fillStyle = "#27272a";
+    ctx.fillRect(22, 270, 212, 114);
+    ctx.fillStyle = "#fb923c";
+    ctx.fillRect(36, 286, 184, 72);
+    ctx.fillStyle = "#111827";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText("GRABFOOD • GOFOOD • NONGKRONG", 128, 326);
+  } else if (type === "rental_ps") {
+    const grad = ctx.createLinearGradient(0, 204, 256, 258);
+    grad.addColorStop(0, "#db2777");
+    grad.addColorStop(1, "#0284c7");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 204, 256, 56);
+    ctx.strokeStyle = "#22d3ee";
+    ctx.lineWidth = 4;
+    ctx.strokeRect(2, 206, 252, 52);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 18px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("RENTAL PS5 & WARNET", 128, 229);
+    ctx.fillStyle = "#fef08a";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillText("VIP AC • FIFA • TEKKEN • 6 MINI-GAMES", 128, 249);
+    // Glowing neon monitor / PS5 screens inside
+    ctx.fillStyle = "#09090b";
+    ctx.fillRect(22, 268, 212, 116);
+    [40, 102, 164].forEach((mx, mIdx) => {
+      ctx.fillStyle = mIdx === 1 ? "#ec4899" : "#22d3ee";
+      ctx.fillRect(mx, 288, 50, 34);
+      ctx.fillStyle = "#0f172a";
+      ctx.fillRect(mx + 4, 292, 42, 26);
+    });
+  } else if (type === "lawson_family") {
+    ctx.fillStyle = "#1e40af";
+    ctx.fillRect(0, 206, 256, 34);
+    ctx.fillStyle = "#10b981";
+    ctx.fillRect(0, 240, 256, 18);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 19px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("FAMILYMART • LAWSON", 128, 230);
+    ctx.font = "bold 10px sans-serif";
+    ctx.fillText("ODEN HANGAT • KOPI SUSU KELUARGA", 128, 253);
+    ctx.fillStyle = isNight ? "#bae6fd" : "#1e293b";
+    ctx.fillRect(24, 268, 208, 116);
+  } else if (type === "minimarket") {
     const isAlfa = Math.random() > 0.5;
     if (isAlfa) {
       ctx.fillStyle = "#dc2626";
@@ -303,7 +411,7 @@ export function getRukoTexture(
     ctx.fillStyle = "#fef08a";
     ctx.font = "bold 17px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("PECEL LELE & WARKOP 24J", 128, 240);
+    ctx.fillText("PECEL LELE & SATE TAICHAN", 128, 240);
     ctx.fillStyle = isNight ? "#fb923c" : "#78350f";
     ctx.fillRect(24, 266, 208, 118);
   }
@@ -413,6 +521,81 @@ export function getLicensePlateTexture(
   ctx.font = "bold 14px monospace";
   ctx.fillStyle = whiteStyle ? "#334155" : "#d4d4d8";
   ctx.fillText("11 • 29  JAKARTA", 128, 68);
+
+  return registerTexture(key, canvas);
+}
+
+export function getMrtSignTexture(stationName: string): THREE.CanvasTexture {
+  const key = `mrt_sign_${stationName}`;
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const { canvas, ctx } = createCanvas(512, 112);
+  ctx.fillStyle = "#0b2447";
+  ctx.fillRect(0, 0, 512, 112);
+  ctx.fillStyle = "#0ea5e9";
+  ctx.fillRect(0, 96, 512, 16);
+
+  ctx.fillStyle = "#22c55e";
+  ctx.beginPath();
+  ctx.arc(46, 52, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 20px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("M", 46, 59);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#7dd3fc";
+  ctx.font = "bold 18px sans-serif";
+  ctx.fillText("MRT JAKARTA • RATANGGA", 82, 38);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 28px sans-serif";
+  ctx.fillText(stationName, 82, 74, 410);
+
+  return registerTexture(key, canvas);
+}
+
+export function getHangoutBannerTexture(
+  title: string,
+  subtitle: string,
+  kind: string
+): THREE.CanvasTexture {
+  const key = `hangout_banner_${kind}_${title}`;
+  if (textureCache.has(key)) return textureCache.get(key)!;
+
+  const { canvas, ctx } = createCanvas(512, 128);
+  const bg =
+    kind === "fore_coffee"
+      ? "#064e3b"
+      : kind === "kopi_kenangan"
+      ? "#18181b"
+      : kind === "rental_ps"
+      ? "#1e1b4b"
+      : "#14532d";
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, 512, 128);
+
+  const accent =
+    kind === "fore_coffee"
+      ? "#34d399"
+      : kind === "kopi_kenangan"
+      ? "#ef4444"
+      : kind === "rental_ps"
+      ? "#ec4899"
+      : "#facc15";
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 8;
+  ctx.strokeRect(6, 6, 500, 116);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "bold 34px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(title, 256, 58, 470);
+
+  ctx.fillStyle = accent;
+  ctx.font = "bold 20px sans-serif";
+  ctx.fillText(subtitle, 256, 98, 470);
 
   return registerTexture(key, canvas);
 }

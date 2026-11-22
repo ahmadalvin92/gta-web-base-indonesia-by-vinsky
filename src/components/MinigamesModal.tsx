@@ -17,7 +17,13 @@ import {
 } from "lucide-react";
 import { soundEngine } from "@/game/SoundEngine";
 
-export type MinigameId = "snake" | "fps" | "drag";
+export type MinigameId =
+  | "snake"
+  | "drag"
+  | "ps_penalty"
+  | "ojol_rush"
+  | "tarkam_fighter"
+  | "fps";
 
 interface MinigamesModalProps {
   activeGame: MinigameId;
@@ -33,30 +39,38 @@ export const MinigamesModal: React.FC<MinigamesModalProps> = ({
   onEarnCash,
 }) => {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4">
-      <div className="relative w-full max-w-4xl max-h-[94vh] overflow-y-auto rounded-2xl border border-pink-500/40 bg-slate-950/95 shadow-2xl shadow-pink-500/20 text-white">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4">
+      <div className="relative w-full max-w-4xl max-h-[94vh] overflow-y-auto rounded-2xl border border-cyan-400/50 bg-slate-950/95 shadow-2xl shadow-pink-500/25 text-white">
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-gradient-to-r from-pink-600/20 via-purple-600/20 to-orange-500/20 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-gradient-to-r from-pink-600/25 via-indigo-600/25 to-cyan-500/25 px-4 py-3">
           <div className="flex items-center gap-2">
-            <Gamepad2 className="h-5 w-5 text-pink-400" />
-            <span className="font-bold tracking-wide text-sm sm:text-base">
-              PORTAL MINI-GAMES • VINSKY ARCADE
-            </span>
+            <Gamepad2 className="h-5 w-5 text-cyan-400" />
+            <div>
+              <span className="font-black tracking-wide text-sm sm:text-base">
+                RENTAL PS5 & WARNET GAMING 24 JAM • VINSKY
+              </span>
+              <p className="text-[10px] text-cyan-300 font-semibold">
+                Billing VIP Paket Malam • Semua Kemenangan Cair Langsung ($)
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
-                { id: "snake", label: "Neon Cyber Snake" },
-                { id: "fps", label: "Urban Warzone FPS" },
-                { id: "drag", label: "Sentul Drag 402m" },
+                { id: "ps_penalty", label: "⚽ PS5 Penalty" },
+                { id: "tarkam_fighter", label: "🥊 Gelut PS5" },
+                { id: "ojol_rush", label: "🏍️ Ojol Rush" },
+                { id: "drag", label: "🏁 Drag 402m" },
+                { id: "snake", label: "🐍 Snake" },
+                { id: "fps", label: "🎯 FPS Arena" },
               ] as const
             ).map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => onSelectGame(tab.id)}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${
+                className={`rounded-lg px-2.5 py-1.5 text-xs font-bold transition ${
                   activeGame === tab.id
-                    ? "bg-gradient-to-r from-pink-500 to-orange-500 text-white shadow"
+                    ? "bg-gradient-to-r from-pink-500 to-cyan-500 text-white shadow"
                     : "bg-white/10 text-slate-300 hover:bg-white/20"
                 }`}
               >
@@ -65,8 +79,8 @@ export const MinigamesModal: React.FC<MinigamesModalProps> = ({
             ))}
             <button
               onClick={onClose}
-              className="ml-2 rounded-lg bg-red-500/20 p-1.5 text-red-300 hover:bg-red-500 hover:text-white transition"
-              aria-label="Tutup Mini-Game"
+              className="ml-1 rounded-lg bg-red-500/25 p-1.5 text-red-300 hover:bg-red-500 hover:text-white transition"
+              aria-label="Tutup Rental PS"
             >
               <X className="h-4 w-4" />
             </button>
@@ -77,6 +91,9 @@ export const MinigamesModal: React.FC<MinigamesModalProps> = ({
           {activeGame === "snake" && <NeonCyberSnake onEarnCash={onEarnCash} />}
           {activeGame === "fps" && <UrbanWarzoneFPS onEarnCash={onEarnCash} />}
           {activeGame === "drag" && <SentulDragRace onEarnCash={onEarnCash} />}
+          {activeGame === "ps_penalty" && <Ps5PenaltyGame onEarnCash={onEarnCash} />}
+          {activeGame === "ojol_rush" && <OjolSudirmanRush onEarnCash={onEarnCash} />}
+          {activeGame === "tarkam_fighter" && <Ps5GelutFighter onEarnCash={onEarnCash} />}
         </div>
       </div>
     </div>
@@ -974,6 +991,666 @@ const SentulDragRace: React.FC<{
           </button>
         </div>
       )}
+    </div>
+  );
+};
+
+/* ============================================================================
+ * 4. PS5 LIGA TARKAM PENALTY SHOOTOUT
+ * ========================================================================== */
+const Ps5PenaltyGame: React.FC<{
+  onEarnCash: (amount: number, reason: string) => void;
+}> = ({ onEarnCash }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [round, setRound] = useState(1);
+  const [goals, setGoals] = useState(0);
+  const [status, setStatus] = useState("Klik sudut gawang untuk menendang!");
+  const [finished, setFinished] = useState(false);
+
+  const animRef = useRef({
+    aimX: 0.5,
+    aimY: 0.45,
+    ballX: 280,
+    ballY: 270,
+    ballScale: 1,
+    targetX: 280,
+    targetY: 115,
+    keeperX: 280,
+    keeperTargetX: 280,
+    kicking: false,
+    timer: 0,
+    round: 1,
+    goals: 0,
+    finished: false,
+  });
+
+  const resetMatch = () => {
+    animRef.current = {
+      aimX: 0.5,
+      aimY: 0.45,
+      ballX: 280,
+      ballY: 270,
+      ballScale: 1,
+      targetX: 280,
+      targetY: 115,
+      keeperX: 280,
+      keeperTargetX: 280,
+      kicking: false,
+      timer: 0,
+      round: 1,
+      goals: 0,
+      finished: false,
+    };
+    setRound(1);
+    setGoals(0);
+    setFinished(false);
+    setStatus("Arahkan kursor / ketuk gawang lalu tendang (Tendangan 1/5)!");
+  };
+
+  const shootAt = useCallback(
+    (normX: number, normY: number) => {
+      const a = animRef.current;
+      if (a.kicking || a.finished) return;
+      a.aimX = Math.max(0.18, Math.min(0.82, normX));
+      a.aimY = Math.max(0.22, Math.min(0.62, normY));
+      a.targetX = a.aimX * 560;
+      a.targetY = a.aimY * 320;
+      const diveChoices = [145, 220, 280, 340, 415];
+      a.keeperTargetX = diveChoices[Math.floor(Math.random() * diveChoices.length)];
+      a.kicking = true;
+      a.timer = 0;
+      soundEngine.playShiftGear();
+    },
+    []
+  );
+
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const a = animRef.current;
+
+      if (a.kicking) {
+        a.timer += dt;
+        const p = Math.min(1, a.timer / 0.48);
+        a.ballX = 280 + (a.targetX - 280) * p;
+        a.ballY = 270 + (a.targetY - 270) * p;
+        a.ballScale = 1 - p * 0.48;
+        a.keeperX += (a.keeperTargetX - a.keeperX) * Math.min(1, dt * 8);
+
+        if (p >= 1) {
+          a.kicking = false;
+          const saved = Math.abs(a.targetX - a.keeperX) < 38 && a.targetY > 82;
+          if (saved) {
+            setStatus(`🧤 DITEPIS KIPER! Siapkan tendangan ke-${a.round + 1}...`);
+          } else {
+            a.goals += 1;
+            setGoals(a.goals);
+            soundEngine.playCashReward();
+            onEarnCash(3000, "Gol PS5 Liga Tarkam");
+            setStatus(`⚽ GOOOLL!! +$3.000!`);
+          }
+
+          setTimeout(() => {
+            const st = animRef.current;
+            if (st.round >= 5) {
+              st.finished = true;
+              setFinished(true);
+              if (st.goals >= 3) {
+                onEarnCash(10000, "Juara PS5 Adu Penalti");
+                setStatus(`🏆 JUARA TARKAM! ${st.goals}/5 Gol (+Bonus $10.000)!`);
+              } else {
+                setStatus(`Selesai! Total ${st.goals}/5 Gol. Coba lagi!`);
+              }
+            } else {
+              st.round += 1;
+              st.ballX = 280;
+              st.ballY = 270;
+              st.ballScale = 1;
+              st.keeperX = 280;
+              setRound(st.round);
+            }
+          }, 750);
+        }
+      }
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const w = canvas.width;
+          const h = canvas.height;
+          // Stadium stands
+          ctx.fillStyle = "#090d1f";
+          ctx.fillRect(0, 0, w, 175);
+          // Floodlights
+          ctx.fillStyle = "#fde68a";
+          [70, 490].forEach((fx) => {
+            ctx.beginPath();
+            ctx.arc(fx, 28, 12, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          // Pitch grass
+          ctx.fillStyle = "#15803d";
+          ctx.fillRect(0, 175, w, h - 175);
+          ctx.fillStyle = "#166534";
+          ctx.fillRect(0, 225, w, 45);
+          // Goal net & white frame
+          ctx.fillStyle = "rgba(255,255,255,0.08)";
+          ctx.fillRect(110, 65, 340, 110);
+          ctx.strokeStyle = "rgba(255,255,255,0.22)";
+          ctx.lineWidth = 1;
+          for (let gx = 125; gx < 450; gx += 20) {
+            ctx.beginPath();
+            ctx.moveTo(gx, 65);
+            ctx.lineTo(gx, 175);
+            ctx.stroke();
+          }
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 6;
+          ctx.strokeRect(110, 65, 340, 110);
+
+          // Goalkeeper
+          ctx.fillStyle = "#f97316";
+          ctx.fillRect(a.keeperX - 18, 112, 36, 52);
+          ctx.fillStyle = "#fde047";
+          ctx.beginPath();
+          ctx.arc(a.keeperX, 102, 11, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Target cursor
+          if (!a.kicking && !a.finished) {
+            ctx.strokeStyle = "#00f0ff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(a.aimX * w, a.aimY * h, 14, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          // Soccer ball
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(a.ballX, a.ballY, 15 * a.ballScale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#111827";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [onEarnCash]);
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="flex w-full max-w-xl items-center justify-between rounded-xl border border-emerald-500/40 bg-slate-900 px-4 py-2 text-xs sm:text-sm">
+        <span>
+          Tendangan: <strong className="text-cyan-400">{round}/5</strong>
+        </span>
+        <span className="font-bold text-amber-300 text-center px-2">{status}</span>
+        <span>
+          Gol: <strong className="text-emerald-400">{goals}</strong>
+        </span>
+      </div>
+
+      <canvas
+        ref={canvasRef}
+        width={560}
+        height={320}
+        onMouseMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          animRef.current.aimX = Math.max(0.2, Math.min(0.8, (e.clientX - r.left) / r.width));
+          animRef.current.aimY = Math.max(0.22, Math.min(0.54, (e.clientY - r.top) / r.height));
+        }}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          shootAt((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+        }}
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          if (!t) return;
+          const r = e.currentTarget.getBoundingClientRect();
+          shootAt((t.clientX - r.left) / r.width, (t.clientY - r.top) / r.height);
+        }}
+        className="w-full max-w-[560px] aspect-[7/4] cursor-crosshair rounded-xl border-2 border-emerald-400/50"
+      />
+
+      <div className="flex flex-wrap gap-2">
+        {[
+          { label: "↖ Pojok Kiri", x: 0.24, y: 0.28 },
+          { label: "⬆ Tengah", x: 0.5, y: 0.28 },
+          { label: "↗ Pojok Kanan", x: 0.76, y: 0.28 },
+        ].map((btn) => (
+          <button
+            key={btn.label}
+            onClick={() => shootAt(btn.x, btn.y)}
+            className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold hover:bg-emerald-500 active:scale-95"
+          >
+            {btn.label}
+          </button>
+        ))}
+        {finished && (
+          <button
+            onClick={resetMatch}
+            className="flex items-center gap-1 rounded-xl bg-gradient-to-r from-pink-500 to-orange-500 px-4 py-2 text-xs font-black"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> Main Lagi
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================================
+ * 5. OJOL SUDIRMAN RUSH (Antar Kopi Kenangan / Fore & Hindari Macet)
+ * ========================================================================== */
+const OjolSudirmanRush: React.FC<{
+  onEarnCash: (amount: number, reason: string) => void;
+}> = ({ onEarnCash }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [score, setScore] = useState(0);
+  const [delivered, setDelivered] = useState(0);
+  const [crashed, setCrashed] = useState(false);
+
+  const stRef = useRef({
+    lane: 1,
+    speed: 220,
+    score: 0,
+    delivered: 0,
+    crashed: false,
+    items: [] as Array<{ lane: number; y: number; type: "coffee" | "bus" | "car" }>,
+    spawnAccum: 0,
+  });
+
+  const moveLane = useCallback((delta: number) => {
+    const s = stRef.current;
+    if (s.crashed) return;
+    s.lane = Math.max(0, Math.min(3, s.lane + delta));
+  }, []);
+
+  const resetRush = () => {
+    stRef.current = {
+      lane: 1,
+      speed: 220,
+      score: 0,
+      delivered: 0,
+      crashed: false,
+      items: [],
+      spawnAccum: 0,
+    };
+    setScore(0);
+    setDelivered(0);
+    setCrashed(false);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") moveLane(-1);
+      if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") moveLane(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [moveLane]);
+
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    const lanesX = [95, 165, 235, 305];
+
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const s = stRef.current;
+
+      if (!s.crashed) {
+        s.speed = Math.min(440, s.speed + dt * 6);
+        s.spawnAccum += dt;
+        if (s.spawnAccum > 0.65) {
+          s.spawnAccum = 0;
+          const isCoffee = Math.random() > 0.58;
+          s.items.push({
+            lane: Math.floor(Math.random() * 4),
+            y: -45,
+            type: isCoffee ? "coffee" : Math.random() > 0.5 ? "bus" : "car",
+          });
+        }
+
+        const playerY = 305;
+        for (let i = s.items.length - 1; i >= 0; i--) {
+          const it = s.items[i];
+          it.y += (it.type === "coffee" ? s.speed : s.speed * 0.78) * dt;
+          if (it.lane === s.lane && Math.abs(it.y - playerY) < 34) {
+            if (it.type === "coffee") {
+              s.delivered += 1;
+              s.score += 300;
+              setDelivered(s.delivered);
+              setScore(s.score);
+              soundEngine.playCashReward();
+              onEarnCash(300, "Antar Kopi Fore/Kenangan");
+              s.items.splice(i, 1);
+              continue;
+            } else {
+              s.crashed = true;
+              setCrashed(true);
+            }
+          }
+          if (it.y > 410) s.items.splice(i, 1);
+        }
+      }
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.fillStyle = "#1e293b";
+          ctx.fillRect(0, 0, 400, 360);
+          ctx.fillStyle = "#334155";
+          ctx.fillRect(55, 0, 290, 360);
+          ctx.strokeStyle = "rgba(255,255,255,0.45)";
+          ctx.setLineDash([18, 16]);
+          ctx.lineWidth = 2;
+          [130, 200, 270].forEach((lx) => {
+            ctx.beginPath();
+            ctx.moveTo(lx, 0);
+            ctx.lineTo(lx, 360);
+            ctx.stroke();
+          });
+          ctx.setLineDash([]);
+
+          for (const it of s.items) {
+            const ix = lanesX[it.lane];
+            if (it.type === "coffee") {
+              ctx.fillStyle = "#10b981";
+              ctx.beginPath();
+              ctx.arc(ix, it.y, 14, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = "#ffffff";
+              ctx.font = "bold 14px sans-serif";
+              ctx.textAlign = "center";
+              ctx.fillText("☕", ix, it.y + 5);
+            } else {
+              ctx.fillStyle = it.type === "bus" ? "#0284c7" : "#ef4444";
+              ctx.fillRect(ix - 18, it.y - (it.type === "bus" ? 32 : 20), 36, it.type === "bus" ? 64 : 40);
+            }
+          }
+
+          // Ojol rider
+          const px = lanesX[s.lane];
+          ctx.fillStyle = "#16a34a";
+          ctx.fillRect(px - 14, 285, 28, 42);
+          ctx.fillStyle = "#22c55e";
+          ctx.beginPath();
+          ctx.arc(px, 298, 9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [onEarnCash]);
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="flex w-full max-w-md items-center justify-between rounded-xl border border-emerald-500/40 bg-slate-900 px-4 py-2 text-xs sm:text-sm">
+        <span>Order Kopi: <strong className="text-emerald-400">{delivered}</strong></span>
+        <span>Pendapatan: <strong className="text-amber-300">${score}</strong></span>
+      </div>
+      <div className="relative">
+        <canvas
+          ref={canvasRef}
+          width={400}
+          height={360}
+          className="h-[310px] w-[345px] rounded-xl border-2 border-emerald-400/50"
+        />
+        {crashed && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/80">
+            <p className="text-xl font-black text-red-400">KESEREMPET BUSWAY!</p>
+            <p className="text-xs text-slate-300 mt-1">Total Antaran: {delivered} Kopi (+${score})</p>
+            <button
+              onClick={resetRush}
+              className="mt-3 flex items-center gap-1 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black"
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> Tarik Order Lagi
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="flex gap-3">
+        <button onClick={() => moveLane(-1)} className="rounded-xl bg-slate-800 px-6 py-3 font-black active:bg-emerald-600">⬅ KIRI (A)</button>
+        <button onClick={() => moveLane(1)} className="rounded-xl bg-slate-800 px-6 py-3 font-black active:bg-emerald-600">KANAN (D) ➡</button>
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================================
+ * 6. PS5 GELUT BETAWI FIGHTER (Bang Jago Silat vs Preman Kota)
+ * ========================================================================== */
+const Ps5GelutFighter: React.FC<{
+  onEarnCash: (amount: number, reason: string) => void;
+}> = ({ onEarnCash }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [pHp, setPHp] = useState(100);
+  const [eHp, setEHp] = useState(100);
+  const [special, setSpecial] = useState(25);
+  const [winner, setWinner] = useState<"player" | "enemy" | null>(null);
+
+  const fRef = useRef({
+    px: 140,
+    ex: 420,
+    pHp: 100,
+    eHp: 100,
+    special: 25,
+    pAttack: 0,
+    eAttack: 0,
+    blocking: false,
+    winner: null as "player" | "enemy" | null,
+    aiCd: 0.9,
+  });
+
+  const strike = useCallback(
+    (dmg: number, range: number, isUlt = false) => {
+      const f = fRef.current;
+      if (f.winner) return;
+      if (isUlt && f.special < 100) return;
+      if (isUlt) {
+        f.special = 0;
+        setSpecial(0);
+      }
+      f.pAttack = 0.25;
+      soundEngine.playGunshot();
+      if (Math.abs(f.ex - f.px) <= range) {
+        f.eHp = Math.max(0, f.eHp - dmg);
+        f.ex = Math.min(500, f.ex + (isUlt ? 55 : 22));
+        f.special = Math.min(100, f.special + (isUlt ? 0 : 25));
+        setEHp(f.eHp);
+        setSpecial(f.special);
+        if (f.eHp <= 0) {
+          f.winner = "player";
+          setWinner("player");
+          soundEngine.playCashReward();
+          onEarnCash(15000, "Juara Gelut Silat PS5");
+        }
+      }
+    },
+    [onEarnCash]
+  );
+
+  const stepPlayer = (dx: number) => {
+    const f = fRef.current;
+    if (f.winner) return;
+    f.px = Math.max(55, Math.min(f.ex - 42, f.px + dx));
+  };
+
+  const resetFight = () => {
+    fRef.current = {
+      px: 140,
+      ex: 420,
+      pHp: 100,
+      eHp: 100,
+      special: 25,
+      pAttack: 0,
+      eAttack: 0,
+      blocking: false,
+      winner: null,
+      aiCd: 0.9,
+    };
+    setPHp(100);
+    setEHp(100);
+    setSpecial(25);
+    setWinner(null);
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "a" || e.key === "ArrowLeft") stepPlayer(-20);
+      if (e.key.toLowerCase() === "d" || e.key === "ArrowRight") stepPlayer(20);
+      if (e.key.toLowerCase() === "j") strike(14, 92);
+      if (e.key.toLowerCase() === "k") strike(20, 108);
+      if (e.code === "Space") {
+        e.preventDefault();
+        strike(42, 160, true);
+      }
+      if (e.key.toLowerCase() === "l") fRef.current.blocking = true;
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "l") fRef.current.blocking = false;
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [strike]);
+
+  useEffect(() => {
+    let raf = 0;
+    let last = performance.now();
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const f = fRef.current;
+
+      if (!f.winner) {
+        if (f.pAttack > 0) f.pAttack = Math.max(0, f.pAttack - dt);
+        if (f.eAttack > 0) f.eAttack = Math.max(0, f.eAttack - dt);
+
+        if (f.ex - f.px > 76) f.ex -= 55 * dt;
+        f.aiCd -= dt;
+        if (f.aiCd <= 0 && f.ex - f.px < 92) {
+          f.aiCd = 1.05;
+          f.eAttack = 0.25;
+          const dmg = f.blocking ? 3 : 12;
+          f.pHp = Math.max(0, f.pHp - dmg);
+          setPHp(f.pHp);
+          if (f.pHp <= 0) {
+            f.winner = "enemy";
+            setWinner("enemy");
+          }
+        }
+      }
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const grad = ctx.createLinearGradient(0, 0, 0, 260);
+          grad.addColorStop(0, "#1e1b4b");
+          grad.addColorStop(1, "#701a75");
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, 560, 220);
+          ctx.fillStyle = "#27272a";
+          ctx.fillRect(0, 220, 560, 70);
+
+          // Player: Bang Jago Betawi
+          ctx.fillStyle = f.blocking ? "#38bdf8" : "#ec4899";
+          ctx.fillRect(f.px - 18, 130, 36, 90);
+          ctx.fillStyle = "#fde68a";
+          ctx.beginPath();
+          ctx.arc(f.px, 114, 14, 0, Math.PI * 2);
+          ctx.fill();
+          if (f.pAttack > 0) {
+            ctx.fillStyle = "#facc15";
+            ctx.fillRect(f.px + 18, 152, 42, 14);
+          }
+
+          // Enemy: Preman Kota
+          ctx.fillStyle = "#dc2626";
+          ctx.fillRect(f.ex - 18, 130, 36, 90);
+          ctx.fillStyle = "#fed7aa";
+          ctx.beginPath();
+          ctx.arc(f.ex, 114, 14, 0, Math.PI * 2);
+          ctx.fill();
+          if (f.eAttack > 0) {
+            ctx.fillStyle = "#f87171";
+            ctx.fillRect(f.ex - 58, 152, 42, 14);
+          }
+        }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="grid w-full max-w-xl grid-cols-2 gap-4 rounded-xl border border-pink-500/40 bg-slate-900 p-3 text-xs">
+        <div>
+          <div className="flex justify-between font-bold text-pink-400">
+            <span>BANG JAGO (KAMU)</span>
+            <span>{pHp}%</span>
+          </div>
+          <div className="mt-1 h-2.5 w-full rounded bg-slate-800">
+            <div className="h-full rounded bg-pink-500" style={{ width: `${pHp}%` }} />
+          </div>
+          <p className="mt-1 text-[10px] text-cyan-300">Jurus Silat: {special}%</p>
+        </div>
+        <div>
+          <div className="flex justify-between font-bold text-red-400">
+            <span>PREMAN KOTA</span>
+            <span>{eHp}%</span>
+          </div>
+          <div className="mt-1 h-2.5 w-full rounded bg-slate-800">
+            <div className="h-full rounded bg-red-600" style={{ width: `${eHp}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="relative">
+        <canvas ref={canvasRef} width={560} height={290} className="w-full max-w-[560px] rounded-xl border-2 border-pink-500/50" />
+        {winner && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/80">
+            <p className={`text-2xl font-black ${winner === "player" ? "text-emerald-400" : "text-red-400"}`}>
+              {winner === "player" ? "K.O.! KAMU MENANG +$15.000!" : "K.O.! COBA LAGI!"}
+            </p>
+            <button onClick={resetFight} className="mt-3 flex items-center gap-1 rounded-xl bg-pink-600 px-5 py-2 font-black text-xs">
+              <RotateCcw className="h-4 w-4" /> Rematch
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap justify-center gap-2">
+        <button onClick={() => stepPlayer(-25)} className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold">⬅ Mundur</button>
+        <button onClick={() => stepPlayer(25)} className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-bold">Maju ➡</button>
+        <button onClick={() => strike(14, 92)} className="rounded-xl bg-pink-600 px-4 py-2 text-xs font-black">👊 Pukul (J)</button>
+        <button onClick={() => strike(20, 108)} className="rounded-xl bg-orange-600 px-4 py-2 text-xs font-black">🦵 Tendang (K)</button>
+        <button
+          disabled={special < 100}
+          onClick={() => strike(42, 160, true)}
+          className="rounded-xl bg-cyan-600 px-4 py-2 text-xs font-black disabled:opacity-40"
+        >
+          ⚡ Jurus Silat ({special}%)
+        </button>
+      </div>
     </div>
   );
 };
