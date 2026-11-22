@@ -1,3 +1,5 @@
+import jakartaRealGeoJson from "@/data/jakarta-real-map.geojson";
+
 export type JabodetabekRegionId =
   | "jakpus"
   | "jaksel"
@@ -48,14 +50,23 @@ export interface SpbuStationData {
   name: string;
 }
 
+export interface TrafficLightNode {
+  id: string;
+  x: number;
+  z: number;
+}
+
 export interface MapLayoutData {
   region: JabodetabekRegion;
-  source: "local-cache" | "openstreetmap-live";
+  source: "local-cache" | "openstreetmap-live" | "jakarta-geojson";
   roads: RoadSegmentData[];
   buildings: BuildingFootprintData[];
   spbuStations: SpbuStationData[];
   tollSigns: Array<{ x: number; z: number; rotation: number; label: string }>;
   waterZones: Array<{ x: number; z: number; width: number; depth: number }>;
+  trafficLights: TrafficLightNode[];
+  halteLocations: Array<{ x: number; z: number; label: string }>;
+  jpoLocations: Array<{ x: number; z: number; rotation: number }>;
 }
 
 export const JABODETABEK_REGIONS: JabodetabekRegion[] = [
@@ -63,9 +74,10 @@ export const JABODETABEK_REGIONS: JabodetabekRegion[] = [
     id: "jakpus",
     areaLabel: "Jakarta Pusat",
     title: "Bundaran HI & Sudirman–SCBD",
-    subtitle: "Jantung ibu kota, jalur Busway TransJakarta & gedung pencakar langit SCBD.",
-    lat: -6.1944,
-    lng: 106.8229,
+    subtitle:
+      "Peta nyata OSM Jakarta (.GeoJSON): Monumen Selamat Datang, Halte TransJakarta Kapal Pesiar, & Simpang Susun Semanggi.",
+    lat: -6.1949,
+    lng: 106.8230,
     hasWaterZone: false,
     hasBusway: true,
     tollLabel: "SUDIRMAN • SCBD • BUNDARAN HI",
@@ -76,20 +88,22 @@ export const JABODETABEK_REGIONS: JabodetabekRegion[] = [
     id: "jaksel",
     areaLabel: "Jakarta Selatan",
     title: "Pondok Indah & Blok M",
-    subtitle: "Distrik hangout hits Jaksel, boulevard luas, ruko & jalur flyover Antasari.",
+    subtitle:
+      "Data jalan & gedung asli OSM Pondok Indah – Blok M, JPO rangka baja, ruko 3 lantai & mal selatan.",
     lat: -6.2442,
     lng: 106.7973,
     hasWaterZone: false,
     hasBusway: true,
     tollLabel: "BLOK M • PONDOK INDAH • JORR",
-    landmarkName: "Blok M Square & Flyover",
+    landmarkName: "Blok M Square & JPO Pondok Indah",
     accentColor: "#a855f7",
   },
   {
     id: "jakut",
     areaLabel: "Jakarta Utara",
     title: "Pantai Indah Kapuk (PIK)",
-    subtitle: "Kawasan pesisir modern, jembatan PIK, wisata kuliner & zona Speedboat laut.",
+    subtitle:
+      "Kawasan pesisir modern, jembatan PIK, wisata kuliner & zona Speedboat laut.",
     lat: -6.1088,
     lng: 106.7405,
     hasWaterZone: true,
@@ -102,7 +116,8 @@ export const JABODETABEK_REGIONS: JabodetabekRegion[] = [
     id: "tangerang",
     areaLabel: "Tangerang",
     title: "BSD City & Alam Sutera",
-    subtitle: "Jalan boulevard lebar ala luar negeri, ideal untuk top-speed supercar & drift.",
+    subtitle:
+      "Boulevard lebar ala luar negeri, ideal untuk top-speed supercar, BMW M4 & drift.",
     lat: -6.3016,
     lng: 106.6533,
     hasWaterZone: false,
@@ -115,7 +130,8 @@ export const JABODETABEK_REGIONS: JabodetabekRegion[] = [
     id: "bogor",
     areaLabel: "Bogor",
     title: "Sirkuit Sentul & Pajajaran",
-    subtitle: "Trek sirkuit balap beraspal mulus, tol Jagorawi & akses kebun raya.",
+    subtitle:
+      "Trek sirkuit balap beraspal mulus, tol Jagorawi & lokasi Balap Liar resmi.",
     lat: -6.5361,
     lng: 106.8575,
     hasWaterZone: true,
@@ -128,7 +144,8 @@ export const JABODETABEK_REGIONS: JabodetabekRegion[] = [
     id: "bekasi_depok",
     areaLabel: "Bekasi & Depok",
     title: "Summarecon Bekasi & Margonda",
-    subtitle: "Koridor ramai, flyover ikonik, dan pusat kuliner malam 24 jam.",
+    subtitle:
+      "Koridor padat, flyover ikonik, dan deretan ruko & warkop 24 jam.",
     lat: -6.2261,
     lng: 107.0011,
     hasWaterZone: false,
@@ -150,7 +167,6 @@ export function worldToGps(
   z: number,
   region: JabodetabekRegion
 ): { lat: number; lng: number } {
-  // World +Z goes south or north? Let's define -Z = North, +Z = South, +X = East
   const lat = region.lat - z / METERS_PER_DEG_LAT;
   const metersPerDegLng =
     111320 * Math.cos((region.lat * Math.PI) / 180);
@@ -184,79 +200,99 @@ export function latLngToOsmTile(
   return { x, y, zoom };
 }
 
+interface GeoJsonFeature {
+  type: string;
+  properties: {
+    osm_id?: number;
+    corridor?: string;
+    kind?: string;
+    highway?: string;
+    name?: string;
+    lanes?: number;
+    bridge?: boolean;
+    busway?: boolean;
+    levels?: number;
+    height?: number;
+  };
+  geometry: {
+    type: string;
+    coordinates: unknown;
+  };
+}
+
 /**
- * Generates instant cached Jabodetabek city road network, busway lanes, flyovers,
- * buildings, SPBU fuel stations, toll gantry signs, and coastal/river water zones.
+ * Extracts real OpenStreetMap road & building coordinates from src/data/jakarta-real-map.geojson
+ * and combines them with Jakarta landmarks, dense 3-story rukos, Halte TransJakarta, JPO & SPBU.
  */
 export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayoutData {
   const region = getRegionById(regionId);
   const roads: RoadSegmentData[] = [];
   const buildings: BuildingFootprintData[] = [];
+
   const spbuStations: SpbuStationData[] = [
-    { id: "spbu_north", x: 34, z: -72, name: "SPBU 34.101 Pasti Pas" },
-    { id: "spbu_south", x: -34, z: 96, name: "SPBU Pertamax Turbo 24H" },
+    { id: "spbu_north", x: 34, z: -85, name: "SPBU Pertamina 34.101 Pasti Pas" },
+    { id: "spbu_south", x: -34, z: 95, name: "SPBU Pertamina Pertamax Turbo" },
   ];
 
-  // Primary arterial N-S and E-W avenues
+  // Always provide clean central avenues soBundaran HI / main spawn plaza and AI traffic paths stay reliable
   roads.push(
     {
       id: "main_ns",
       points: [
-        [0, -340],
-        [0, 340],
+        [0, -360],
+        [0, 360],
       ],
-      width: 22,
-      name: region.id === "jakpus" ? "Jl. Jend. Sudirman" : "Boulevard Utama",
+      width: 24,
+      name: region.id === "jakpus" ? "Jl. M.H. Thamrin – Jl. Jend. Sudirman" : "Boulevard Utama Jakarta",
     },
     {
       id: "main_ew",
       points: [
-        [-340, 0],
-        [340, 0],
+        [-360, 0],
+        [360, 0],
       ],
-      width: 20,
-      name: region.id === "jakpus" ? "Jl. M.H. Thamrin" : "Jl. Raya Protokol",
+      width: 22,
+      name: region.id === "jakpus" ? "Jl. Kebon Kacang – Jl. Sutan Sjahrir" : "Jl. Arteri Raya",
     }
   );
 
-  // TransJakarta dedicated busway lane in center median when supported
   if (region.hasBusway) {
     roads.push({
       id: "busway_ns",
       points: [
-        [-5.5, -320],
-        [-5.5, 320],
+        [-4.5, -340],
+        [-4.5, 340],
       ],
       width: 4.5,
-      name: "Koridor Busway TransJakarta",
+      name: "Koridor 1 Busway TransJakarta",
       isBusway: true,
     });
   }
 
-  // Grid blocks around center (-240..240 every 90m)
+  // Grid avenues & collector streets
   const gridOffsets = [-240, -150, -90, 90, 150, 240];
   gridOffsets.forEach((offset, i) => {
     roads.push({
       id: `grid_ns_${i}`,
       points: [
-        [offset, -300],
-        [offset, 300],
+        [offset, -320],
+        [offset, 320],
       ],
-      width: 13,
+      width: 14,
       name: `Jl. Distrik ${i + 1}`,
     });
     roads.push({
       id: `grid_ew_${i}`,
       points: [
-        [-300, offset],
-        [300, offset],
+        [-320, offset],
+        [320, offset],
       ],
-      width: 13,
+      width: 14,
       name: `Jl. Penghubung ${i + 1}`,
     });
   });
 
-  // Elevated Toll Flyover / Jalan Layang
+  // Simpang Susun Semanggi / Tol Layang Jasa Marga
   roads.push({
     id: "flyover_tol",
     points: [
@@ -266,12 +302,11 @@ export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayou
       [320, -150],
     ],
     width: 16,
-    name: "Tol Layang Dalam Kota (Jasa Marga)",
+    name: "Simpang Susun Semanggi / Tol Dalam Kota",
     isFlyover: true,
     elevation: 8.5,
   });
 
-  // Sentul circuit loop for Bogor or outer ring boulevard
   if (regionId === "bogor") {
     roads.push({
       id: "sentul_circuit",
@@ -289,53 +324,142 @@ export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayou
     });
   }
 
-  // Deterministic city buildings placed cleanly inside block footprints (never blocking roads)
-  const blockCenters = [-195, -120, -45, 45, 120, 195];
-  let bIdx = 0;
+  let usedGeoJson = false;
+  if (regionId === "jakpus" || regionId === "jaksel") {
+    const fc = jakartaRealGeoJson as { features?: GeoJsonFeature[] };
+    const features = Array.isArray(fc?.features) ? fc.features : [];
+    const targetCorridor = regionId === "jakpus" ? "sudirman-hi" : "pondokindah-blokm";
+
+    for (const feat of features) {
+      if (feat.properties?.corridor !== targetCorridor) continue;
+
+      if (
+        feat.properties?.kind === "road" &&
+        feat.geometry?.type === "LineString" &&
+        Array.isArray(feat.geometry.coordinates)
+      ) {
+        const pts: Array<[number, number]> = [];
+        for (const c of feat.geometry.coordinates as Array<[number, number]>) {
+          const p = gpsToWorld(c[1], c[0], region);
+          if (Math.abs(p.x) < 420 && Math.abs(p.z) < 420) {
+            pts.push([p.x, p.z]);
+          }
+        }
+        if (pts.length >= 2) {
+          usedGeoJson = true;
+          const lanes = feat.properties.lanes || 3;
+          roads.push({
+            id: `geojson_road_${feat.properties.osm_id || roads.length}`,
+            points: pts,
+            width: Math.min(20, Math.max(8, lanes * 3.5)),
+            name: feat.properties.name || "Jl. Jakarta (GeoJSON)",
+            isBusway: Boolean(feat.properties.busway),
+            isFlyover: Boolean(feat.properties.bridge),
+            elevation: feat.properties.bridge ? 8.5 : 0,
+          });
+        }
+      } else if (
+        feat.properties?.kind === "building" &&
+        feat.geometry?.type === "Polygon" &&
+        Array.isArray(feat.geometry.coordinates) &&
+        buildings.length < 130
+      ) {
+        const ring = (feat.geometry.coordinates as Array<Array<[number, number]>>)[0];
+        if (!Array.isArray(ring) || ring.length < 3) continue;
+        let minX = Infinity,
+          maxX = -Infinity,
+          minZ = Infinity,
+          maxZ = -Infinity;
+        for (const c of ring) {
+          const p = gpsToWorld(c[1], c[0], region);
+          minX = Math.min(minX, p.x);
+          maxX = Math.max(maxX, p.x);
+          minZ = Math.min(minZ, p.z);
+          maxZ = Math.max(maxZ, p.z);
+        }
+        const cx = (minX + maxX) * 0.5;
+        const cz = (minZ + maxZ) * 0.5;
+        // Keep central Bundaran HI roundabout & main N-S/E-W lanes clear
+        if (
+          Math.hypot(cx, cz) < 38 ||
+          Math.abs(cx) < 20 ||
+          Math.abs(cz) < 20 ||
+          Math.abs(cx) > 360 ||
+          Math.abs(cz) > 360
+        ) {
+          continue;
+        }
+        const bw = Math.min(Math.max(maxX - minX, 10), 42);
+        const bd = Math.min(Math.max(maxZ - minZ, 10), 42);
+        const levels = feat.properties.levels || 0;
+        const explicitH = feat.properties.height || 0;
+        const h =
+          explicitH > 0
+            ? Math.min(explicitH, 95)
+            : levels > 0
+            ? Math.min(levels * 4.2, 90)
+            : 14 + (buildings.length % 6) * 8;
+
+        usedGeoJson = true;
+        buildings.push({
+          id: `geojson_bld_${feat.properties.osm_id || buildings.length}`,
+          x: cx,
+          z: cz,
+          width: bw,
+          depth: bd,
+          height: h,
+          kind:
+            h > 26
+              ? "skyscraper"
+              : (["minimarket", "bengkel", "warung"] as const)[buildings.length % 3],
+          rotation: 0,
+        });
+      }
+    }
+  }
+
+  // Dense Jakarta 3-story Rukos & Skyscrapers along arterial corridors
   const rukoTypes: Array<"minimarket" | "bengkel" | "warung"> = [
     "minimarket",
     "bengkel",
     "warung",
   ];
+  const blockCenters = [-195, -120, -45, 45, 120, 195];
+  let bIdx = 0;
 
   for (const bx of blockCenters) {
     for (const bz of blockCenters) {
-      // Keep Bundaran / central spawn plaza clear
-      if (Math.abs(bx) < 55 && Math.abs(bz) < 55) continue;
-      // Keep PIK coastal east zone open for water
+      if (Math.abs(bx) < 42 && Math.abs(bz) < 42) continue;
       if (region.hasWaterZone && bx > 150) continue;
-      // Keep SPBU footprints clear
       if (
-        (Math.abs(bx - 45) < 25 && Math.abs(bz + 72) < 25) ||
-        (Math.abs(bx + 45) < 25 && Math.abs(bz - 96) < 25)
+        (Math.abs(bx - 34) < 26 && Math.abs(bz + 85) < 26) ||
+        (Math.abs(bx + 34) < 26 && Math.abs(bz - 95) < 26)
       ) {
         continue;
       }
 
       const seed = (Math.abs(bx * 7 + bz * 13) + bIdx) % 10;
-      const isCore = Math.abs(bx) < 130 && Math.abs(bz) < 130;
+      const isCore = Math.abs(bx) < 120 && Math.abs(bz) < 120;
       const kind: BuildingFootprintData["kind"] =
-        isCore && seed > 2
+        isCore && seed > 3
           ? "skyscraper"
           : seed === 1
           ? "mall"
-          : seed % 3 === 0
-          ? rukoTypes[bIdx % 3]
-          : "skyscraper";
+          : rukoTypes[bIdx % 3];
 
       const height =
         kind === "skyscraper"
-          ? 28 + ((seed * 9) % 58)
+          ? 34 + ((seed * 11) % 62)
           : kind === "mall"
-          ? 18
-          : 8 + (seed % 4);
+          ? 20
+          : 11.5; // 3-story Indonesian Ruko
 
       buildings.push({
-        id: `bld_${bIdx++}`,
+        id: `jkt_block_${bIdx++}`,
         x: bx,
         z: bz,
-        width: kind === "skyscraper" ? 22 + (seed % 10) : 16,
-        depth: kind === "skyscraper" ? 22 + ((seed * 3) % 10) : 14,
+        width: kind === "skyscraper" ? 24 + (seed % 10) : 16,
+        depth: kind === "skyscraper" ? 24 + ((seed * 3) % 10) : 15,
         height,
         kind,
         rotation: 0,
@@ -343,34 +467,70 @@ export function getLocalCachedMapLayout(regionId: JabodetabekRegionId): MapLayou
     }
   }
 
+  // Extra dense row of 3-story Ruko flanking Jl. Jend. Sudirman / Boulevard sides
+  [-58, -32, 32, 58, 118, -118].forEach((rz, idx) => {
+    [-25, 25].forEach((rx) => {
+      if (Math.abs(rx - 34) < 16 && Math.abs(rz + 85) < 16) return;
+      if (Math.abs(rx + 34) < 16 && Math.abs(rz - 95) < 16) return;
+      buildings.push({
+        id: `ruko_row_${idx}_${rx}`,
+        x: rx,
+        z: rz,
+        width: 12,
+        depth: 13,
+        height: 11.8,
+        kind: rukoTypes[(idx + (rx > 0 ? 1 : 0)) % 3],
+        rotation: 0,
+      });
+    });
+  });
+
   const tollSigns = [
-    { x: 0, z: -65, rotation: 0, label: region.tollLabel },
-    { x: 0, z: 75, rotation: Math.PI, label: "ARAH PUSAT KOTA • SCBD" },
-    { x: -115, z: 0, rotation: Math.PI / 2, label: "TOL JAGORAWI / SENTUL" },
-    { x: 115, z: 0, rotation: -Math.PI / 2, label: "PANTAI INDAH KAPUK • BANDARA" },
+    { x: 0, z: -68, rotation: 0, label: region.tollLabel },
+    { x: 0, z: 75, rotation: Math.PI, label: "BUNDARAN HI • THAMRIN" },
+    { x: -115, z: 0, rotation: Math.PI / 2, label: "SEMANGGI • TOL DALAM KOTA" },
+    { x: 115, z: 0, rotation: -Math.PI / 2, label: "SCBD • SENAYAN • PONDOK INDAH" },
   ];
 
   const waterZones = region.hasWaterZone
     ? [{ x: 255, z: 0, width: 170, depth: 620 }]
-    : [{ x: 320, z: 240, width: 130, depth: 180 }]; // Sungai Ciliwung / Danau Kota
+    : [{ x: 325, z: 245, width: 130, depth: 180 }];
+
+  const trafficLights: TrafficLightNode[] = [
+    { id: "tl_north", x: 0, z: -90 },
+    { id: "tl_south", x: 0, z: 90 },
+    { id: "tl_west", x: -90, z: 0 },
+    { id: "tl_east", x: 90, z: 0 },
+  ];
+
+  const halteLocations = region.hasBusway
+    ? [
+        { x: -4.5, z: -52, label: "Bundaran HI" },
+        { x: -4.5, z: 54, label: "Tosari / SCBD" },
+      ]
+    : [];
+
+  const jpoLocations = [
+    { x: 0, z: 42, rotation: 0 },
+    { x: 0, z: -116, rotation: 0 },
+  ];
 
   return {
     region,
-    source: "local-cache",
-    roads,
-    buildings,
+    source: usedGeoJson ? "jakarta-geojson" : "local-cache",
+    roads: roads.slice(0, 90),
+    buildings: buildings.slice(0, 140),
     spbuStations,
     tollSigns,
     waterZones,
+    trafficLights,
+    halteLocations,
+    jpoLocations,
   };
 }
 
 const osmMemoryCache = new Map<JabodetabekRegionId, MapLayoutData>();
 
-/**
- * Fetches real-world Jabodetabek road & building footprints from OpenStreetMap Overpass API (100% Free, No API Key).
- * Falls back gracefully to local cached layout if offline or rate-limited.
- */
 export async function fetchJabodetabekMapOSM(
   regionId: JabodetabekRegionId
 ): Promise<MapLayoutData> {
@@ -379,123 +539,65 @@ export async function fetchJabodetabekMapOSM(
   }
 
   const baseLayout = getLocalCachedMapLayout(regionId);
+  if (regionId === "jakpus" || regionId === "jaksel") {
+    osmMemoryCache.set(regionId, baseLayout);
+    return baseLayout;
+  }
+
   const { region } = baseLayout;
-
-  // Query bounding box (~450m radius around region center)
-  const deltaLat = 0.0042;
-  const deltaLng = 0.0042;
-  const s = (region.lat - deltaLat).toFixed(5);
-  const w = (region.lng - deltaLng).toFixed(5);
-  const n = (region.lat + deltaLat).toFixed(5);
-  const e = (region.lng + deltaLng).toFixed(5);
-
-  const query = `[out:json][timeout:6];(way["highway"~"^(motorway|trunk|primary|secondary|tertiary|residential)$"](${s},${w},${n},${e});way["building"](${s},${w},${n},${e}););out body 120;>;out skel qt;`;
+  const delta = 0.0038;
+  const bbox = `${(region.lng - delta).toFixed(5)},${(region.lat - delta).toFixed(
+    5
+  )},${(region.lng + delta).toFixed(5)},${(region.lat + delta).toFixed(5)}`;
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5500);
-
-    const res = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(
+      `https://api.openstreetmap.org/api/0.6/map.json?bbox=${bbox}`,
+      { signal: controller.signal }
+    );
     clearTimeout(timer);
-
     if (!res.ok) return baseLayout;
+
     const json = await res.json();
     if (!json || !Array.isArray(json.elements)) return baseLayout;
 
     const nodes = new Map<number, { lat: number; lon: number }>();
     for (const el of json.elements) {
-      if (el.type === "node" && typeof el.lat === "number" && typeof el.lon === "number") {
-        nodes.set(el.id, { lat: el.lat, lon: el.lon });
-      }
+      if (el.type === "node") nodes.set(el.id, { lat: el.lat, lon: el.lon });
     }
 
     const osmRoads: RoadSegmentData[] = [];
-    const osmBuildings: BuildingFootprintData[] = [];
-
     for (const el of json.elements) {
-      if (el.type !== "way" || !Array.isArray(el.nodes) || el.nodes.length < 2) continue;
-
-      if (el.tags?.highway) {
+      if (el.type === "way" && el.tags?.highway && Array.isArray(el.nodes)) {
         const pts: Array<[number, number]> = [];
         for (const nid of el.nodes) {
           const nd = nodes.get(nid);
           if (nd) {
             const p = gpsToWorld(nd.lat, nd.lon, region);
-            if (Math.abs(p.x) < 360 && Math.abs(p.z) < 360) {
-              pts.push([p.x, p.z]);
-            }
+            if (Math.abs(p.x) < 350 && Math.abs(p.z) < 350) pts.push([p.x, p.z]);
           }
         }
         if (pts.length >= 2) {
-          const hw = el.tags.highway;
-          const width =
-            hw === "motorway" || hw === "trunk"
-              ? 18
-              : hw === "primary"
-              ? 15
-              : hw === "secondary"
-              ? 12
-              : 9;
           osmRoads.push({
-            id: `osm_road_${el.id}`,
+            id: `osm_${el.id}`,
             points: pts,
-            width,
+            width: 12,
             name: el.tags.name ?? "Jalan Jabodetabek (OSM)",
           });
-        }
-      } else if (el.tags?.building && osmBuildings.length < 70) {
-        let minX = Infinity,
-          maxX = -Infinity,
-          minZ = Infinity,
-          maxZ = -Infinity;
-        let count = 0;
-        for (const nid of el.nodes) {
-          const nd = nodes.get(nid);
-          if (nd) {
-            const p = gpsToWorld(nd.lat, nd.lon, region);
-            minX = Math.min(minX, p.x);
-            maxX = Math.max(maxX, p.x);
-            minZ = Math.min(minZ, p.z);
-            maxZ = Math.max(maxZ, p.z);
-            count++;
-          }
-        }
-        if (count >= 3) {
-          const cx = (minX + maxX) * 0.5;
-          const cz = (minZ + maxZ) * 0.5;
-          const bw = Math.min(Math.max(maxX - minX, 8), 38);
-          const bd = Math.min(Math.max(maxZ - minZ, 8), 38);
-          // Keep central spawn plaza open
-          if (Math.abs(cx) > 32 || Math.abs(cz) > 32) {
-            const levels = Number(el.tags["building:levels"]) || 0;
-            const h = levels > 0 ? Math.min(levels * 4.2, 75) : 14 + ((el.id % 5) * 7);
-            osmBuildings.push({
-              id: `osm_bld_${el.id}`,
-              x: cx,
-              z: cz,
-              width: bw,
-              depth: bd,
-              height: h,
-              kind: h > 22 ? "skyscraper" : (["minimarket", "bengkel", "warung"] as const)[el.id % 3],
-              rotation: 0,
-            });
-          }
         }
       }
     }
 
     const merged: MapLayoutData = {
       ...baseLayout,
-      source: osmRoads.length > 0 ? "openstreetmap-live" : "local-cache",
-      roads: osmRoads.length > 4 ? [...baseLayout.roads.slice(0, 3), ...osmRoads.slice(0, 48)] : baseLayout.roads,
-      buildings: osmBuildings.length > 10 ? osmBuildings : baseLayout.buildings,
+      source: osmRoads.length > 0 ? "openstreetmap-live" : baseLayout.source,
+      roads:
+        osmRoads.length > 3
+          ? [...baseLayout.roads.slice(0, 4), ...osmRoads.slice(0, 45)]
+          : baseLayout.roads,
     };
-
     osmMemoryCache.set(regionId, merged);
     return merged;
   } catch {

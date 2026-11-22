@@ -24,6 +24,9 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  BookOpen,
+  HelpCircle,
+  ImageDown,
 } from "lucide-react";
 import {
   JABODETABEK_REGIONS,
@@ -41,38 +44,27 @@ import {
   VehicleKind,
   VEHICLE_SPECS,
 } from "@/game/ModelRegistry";
+import { disposeAllGeneratedTextures } from "@/game/IndonesianTextureGenerator";
 import {
-  disposeAllGeneratedTextures,
-  getAsphaltTexture,
-  getBuswayTexture,
-  getRukoTexture,
-  getSidewalkCurbTexture,
-  getSkyscraperTexture,
-  getSpbuTexture,
-  getTollSignTexture,
-} from "@/game/IndonesianTextureGenerator";
+  BuildingCollider,
+  TrafficLightMeshGroup,
+  buildJakartaCityScene,
+} from "@/game/CityBuilder";
 import { soundEngine } from "@/game/SoundEngine";
 import { SmartphoneHUD, TimeOfDay } from "./SmartphoneHUD";
 import { MinigameId, MinigamesModal } from "./MinigamesModal";
+import { HowToPlayModal } from "./HowToPlayModal";
+import { JAKARTA_RADIO_CHANNELS, JakartaRadioHUD } from "./JakartaRadioHUD";
 
 type ControlModePref = "auto" | "mobile" | "desktop";
 type ScreenStage = "menu" | "loading" | "playing";
 type CameraViewMode = "chase" | "hood" | "cockpit";
-
-interface BuildingCollider {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-  height: number;
-}
 
 interface PoliceUnit {
   mesh: VehicleInstance;
   x: number;
   z: number;
   yaw: number;
-  speed: number;
 }
 
 interface TrafficUnit {
@@ -80,7 +72,8 @@ interface TrafficUnit {
   x: number;
   z: number;
   yaw: number;
-  speed: number;
+  baseSpeed: number;
+  curSpeed: number;
   axis: "ns" | "ew";
   dir: 1 | -1;
 }
@@ -93,6 +86,18 @@ interface BulletItem {
 }
 
 const STORAGE_CONTROL_KEY = "vinsky_gta_control_mode";
+const PORTFOLIO_URL = "https://vinsky-techfolio.vercel.app/";
+
+const CreatorLink: React.FC<{ className?: string }> = ({ className = "" }) => (
+  <a
+    href={PORTFOLIO_URL}
+    target="_blank"
+    rel="noopener noreferrer"
+    className={`font-bold text-cyan-300 hover:text-pink-400 hover:underline hover:drop-shadow-[0_0_10px_rgba(255,62,157,0.9)] transition ${className}`}
+  >
+    Ahmad Alvin Griffin (Vinsky)
+  </a>
+);
 
 export default function GTAIndonesiaGame() {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -100,40 +105,46 @@ export default function GTAIndonesiaGame() {
   // Screen & Menu State
   const [stage, setStage] = useState<ScreenStage>("menu");
   const [loadingPct, setLoadingPct] = useState(0);
-  const [loadingTip, setLoadingTip] = useState("Menyiapkan kota Jabodetabek...");
+  const [loadingTip, setLoadingTip] = useState("Memuat peta nyata Jakarta (.GeoJSON)...");
   const [selectedRegionId, setSelectedRegionId] = useState<JabodetabekRegionId>("jakpus");
-  const [selectedStartVehicle, setSelectedStartVehicle] = useState<VehicleKind>("supercar");
+  const [selectedStartVehicle, setSelectedStartVehicle] = useState<VehicleKind>("avanza");
   const [controlPref, setControlPref] = useState<ControlModePref>("auto");
   const [resolvedMobile, setResolvedMobile] = useState(false);
   const [isPortrait, setIsPortrait] = useState(false);
 
-  // In-Game HUD State
+  // Modals & Overlays
   const [paused, setPaused] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
+  const [howToPlayOpen, setHowToPlayOpen] = useState(false);
+  const [showOnboardingTip, setShowOnboardingTip] = useState(true);
   const [activeMinigame, setActiveMinigame] = useState<MinigameId | null>(null);
   const [muted, setMuted] = useState(false);
+  const [radioChannelIndex, setRadioChannelIndex] = useState(0);
 
+  // Live HUD State
   const [inVehicle, setInVehicle] = useState(true);
   const [cameraMode, setCameraMode] = useState<CameraViewMode>("chase");
   const [speedKmh, setSpeedKmh] = useState(0);
   const [fuelPct, setFuelPct] = useState(100);
   const [vehicleHpPct, setVehicleHpPct] = useState(100);
   const [nitroPct, setNitroPct] = useState(100);
-  const [cash, setCash] = useState(25000);
+  const [cash, setCash] = useState(35000);
   const [wantedLevel, setWantedLevel] = useState(0);
-  const [gps, setGps] = useState({ lat: -6.1944, lng: 106.8229 });
-  const [mapSource, setMapSource] = useState<"local-cache" | "openstreetmap-live">("local-cache");
+  const [gps, setGps] = useState({ lat: -6.1949, lng: 106.8230 });
+  const [mapSource, setMapSource] = useState<
+    "local-cache" | "openstreetmap-live" | "jakarta-geojson"
+  >("jakarta-geojson");
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Vehicle Customizations
-  const [currentVehicleKind, setCurrentVehicleKind] = useState<VehicleKind>("supercar");
-  const [paintColor, setPaintColor] = useState("#ff5500");
+  const [currentVehicleKind, setCurrentVehicleKind] = useState<VehicleKind>("avanza");
+  const [paintColor, setPaintColor] = useState("#e2e8f0");
   const [rimColor, setRimColor] = useState("#e2e8f0");
-  const [plateText, setPlateText] = useState("B 1 VKY");
-  const [neonEnabled, setNeonEnabled] = useState(true);
+  const [plateText, setPlateText] = useState("B 2026 VIN");
+  const [neonEnabled, setNeonEnabled] = useState(false);
 
-  // World Environment
-  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>("sunset");
+  // World Environment (Default bright Jakarta daytime matching Street View references)
+  const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>("morning");
   const [isRaining, setIsRaining] = useState(false);
   const [leftSignal, setLeftSignal] = useState(false);
   const [rightSignal, setRightSignal] = useState(false);
@@ -149,7 +160,6 @@ export default function GTAIndonesiaGame() {
   const [joyKnob, setJoyKnob] = useState({ x: 0, y: 0 });
   const joyOriginRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Toast helper
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
   }, []);
@@ -160,7 +170,6 @@ export default function GTAIndonesiaGame() {
     return () => clearTimeout(t);
   }, [toastMsg]);
 
-  // Detect control mode & portrait orientation
   const resolveControlMode = useCallback((pref: ControlModePref) => {
     if (pref === "mobile") return true;
     if (pref === "desktop") return false;
@@ -205,7 +214,7 @@ export default function GTAIndonesiaGame() {
     [resolveControlMode]
   );
 
-  // Mutable Game Engine Refs
+  // Mutable Engine Refs
   const engineRefs = useRef<{
     scene: THREE.Scene | null;
     camera: THREE.PerspectiveCamera | null;
@@ -217,6 +226,7 @@ export default function GTAIndonesiaGame() {
     colliders: BuildingCollider[];
     policePool: PoliceUnit[];
     trafficPool: TrafficUnit[];
+    trafficLights: TrafficLightMeshGroup[];
     bulletPool: BulletItem[];
     rainPoints: THREE.Points | null;
     ambientLight: THREE.HemisphereLight | null;
@@ -236,6 +246,7 @@ export default function GTAIndonesiaGame() {
     colliders: [],
     policePool: [],
     trafficPool: [],
+    trafficLights: [],
     bulletPool: [],
     rainPoints: null,
     ambientLight: null,
@@ -249,29 +260,28 @@ export default function GTAIndonesiaGame() {
   const simRef = useRef({
     inVehicle: true,
     cameraMode: "chase" as CameraViewMode,
-    timeOfDay: "sunset" as TimeOfDay,
+    timeOfDay: "morning" as TimeOfDay,
     isRaining: false,
     paused: false,
     wantedLevel: 0,
     engineStage: 1,
 
-    // Vehicle physics
-    vehX: 0,
+    // Vehicle physics (Spawn near Bundaran HI southern entrance looking north at the monument)
+    vehX: 4,
     vehY: 0,
-    vehZ: 18,
-    vehYaw: Math.PI, // Facing north (-Z)
-    vehSpeed: 0, // m/s
+    vehZ: 28,
+    vehYaw: Math.PI,
+    vehSpeed: 0,
     vehPitch: 0,
     vehRoll: 0,
-    vehAltVel: 0,
     fuel: 100,
     vehHp: 100,
     nitro: 100,
 
     // Character physics
-    charX: 4,
+    charX: 7,
     charY: 0,
-    charZ: 18,
+    charZ: 28,
     charYaw: Math.PI,
     charVelY: 0,
     isJumping: false,
@@ -289,10 +299,9 @@ export default function GTAIndonesiaGame() {
     raceTimer: 0,
   });
 
-  // Live Input State (Keyboard + Touch unified)
   const inputRef = useRef({
-    throttle: 0, // -1..1
-    steer: 0, // -1..1
+    throttle: 0,
+    steer: 0,
     brake: false,
     nitro: false,
     jump: false,
@@ -303,13 +312,13 @@ export default function GTAIndonesiaGame() {
     touchBrake: false,
   });
 
-  // Sync React flags into simRef
   useEffect(() => {
-    simRef.current.paused = paused || Boolean(activeMinigame) || stage !== "playing";
+    simRef.current.paused =
+      paused || howToPlayOpen || Boolean(activeMinigame) || stage !== "playing";
     if (simRef.current.paused) {
       soundEngine.stopAll();
     }
-  }, [paused, activeMinigame, stage]);
+  }, [paused, howToPlayOpen, activeMinigame, stage]);
 
   useEffect(() => {
     simRef.current.cameraMode = cameraMode;
@@ -321,380 +330,118 @@ export default function GTAIndonesiaGame() {
     simRef.current.hazard = hazardSignal;
   }, [leftSignal, rightSignal, hazardSignal]);
 
-  // Apply TimeOfDay & Rain lighting dynamically
-  const applyEnvironmentLighting = useCallback(
-    (tod: TimeOfDay, rain: boolean) => {
-      const { scene, ambientLight, sunLight, rainPoints } = engineRefs.current;
-      if (!scene || !ambientLight || !sunLight) return;
+  // Lighting tailored to Jakarta visual references (Bright Sunny Haze / Golden Sore / Night Neon)
+  const applyEnvironmentLighting = useCallback((tod: TimeOfDay, rain: boolean) => {
+    const { scene, ambientLight, sunLight, rainPoints } = engineRefs.current;
+    if (!scene || !ambientLight || !sunLight) return;
 
-      if (tod === "morning") {
-        scene.background = new THREE.Color(rain ? 0x64748b : 0x7dd3fc);
-        scene.fog = new THREE.FogExp2(rain ? 0x64748b : 0x93c5fd, rain ? 0.0045 : 0.0018);
-        ambientLight.color.setHex(0xe0f2fe);
-        ambientLight.groundColor.setHex(0x334155);
-        ambientLight.intensity = rain ? 0.85 : 1.15;
-        sunLight.color.setHex(0xfffbeb);
-        sunLight.intensity = rain ? 1.1 : 2.1;
-        sunLight.position.set(120, 180, 90);
-        simRef.current.headlightsOn = rain;
-      } else if (tod === "sunset") {
-        // GTA VI Vice-inspired purple-orange golden hour
-        scene.background = new THREE.Color(rain ? 0x3b1f4b : 0x4c1d57);
-        scene.fog = new THREE.FogExp2(rain ? 0x4c1d57 : 0x7c2d68, rain ? 0.0048 : 0.0024);
-        ambientLight.color.setHex(0xf9a8d4);
-        ambientLight.groundColor.setHex(0x1e1b4b);
-        ambientLight.intensity = 0.9;
-        sunLight.color.setHex(0xff7b39);
-        sunLight.intensity = 2.3;
-        sunLight.position.set(-160, 48, -120);
-        simRef.current.headlightsOn = true;
-      } else {
-        // Night neon
-        scene.background = new THREE.Color(0x050714);
-        scene.fog = new THREE.FogExp2(0x070a1b, rain ? 0.0055 : 0.003);
-        ambientLight.color.setHex(0x6366f1);
-        ambientLight.groundColor.setHex(0x09090b);
-        ambientLight.intensity = 0.55;
-        sunLight.color.setHex(0x93c5fd);
-        sunLight.intensity = 0.7;
-        sunLight.position.set(80, 120, -80);
-        simRef.current.headlightsOn = true;
-      }
+    if (tod === "morning") {
+      scene.background = new THREE.Color(rain ? 0x64748b : 0x8bc8eb);
+      scene.fog = new THREE.FogExp2(rain ? 0x64748b : 0xc4dfee, rain ? 0.0042 : 0.0014);
+      ambientLight.color.setHex(0xf0f9ff);
+      ambientLight.groundColor.setHex(0x475569);
+      ambientLight.intensity = rain ? 0.95 : 1.35;
+      sunLight.color.setHex(0xfffbeb);
+      sunLight.intensity = rain ? 1.2 : 2.35;
+      sunLight.position.set(110, 185, 85);
+      simRef.current.headlightsOn = rain;
+    } else if (tod === "sunset") {
+      scene.background = new THREE.Color(rain ? 0x4b2c4e : 0xc27ba0);
+      scene.fog = new THREE.FogExp2(rain ? 0x4b2c4e : 0xe39b7d, rain ? 0.0045 : 0.0021);
+      ambientLight.color.setHex(0xfbcfe8);
+      ambientLight.groundColor.setHex(0x2e1065);
+      ambientLight.intensity = 1.05;
+      sunLight.color.setHex(0xff8c42);
+      sunLight.intensity = 2.4;
+      sunLight.position.set(-165, 52, -120);
+      simRef.current.headlightsOn = true;
+    } else {
+      scene.background = new THREE.Color(0x050714);
+      scene.fog = new THREE.FogExp2(0x070a1b, rain ? 0.0055 : 0.0028);
+      ambientLight.color.setHex(0x6366f1);
+      ambientLight.groundColor.setHex(0x09090b);
+      ambientLight.intensity = 0.62;
+      sunLight.color.setHex(0x93c5fd);
+      sunLight.intensity = 0.78;
+      sunLight.position.set(80, 120, -80);
+      simRef.current.headlightsOn = true;
+    }
 
-      if (rainPoints) {
-        rainPoints.visible = rain;
-      }
-    },
-    []
-  );
+    if (rainPoints) rainPoints.visible = rain;
+  }, []);
 
-  // Build City Geometry from MapLayoutData
   const buildCityWorld = useCallback(
     (layout: MapLayoutData, tod: TimeOfDay, rain: boolean) => {
-      const { scene, worldGroup } = engineRefs.current;
-      if (!scene || !worldGroup) return;
+      const { worldGroup } = engineRefs.current;
+      if (!worldGroup) return;
 
-      // Clear previous world objects and dispose cleanly
-      while (worldGroup.children.length > 0) {
-        const child = worldGroup.children[0];
-        worldGroup.remove(child);
-        child.traverse((obj) => {
-          if ((obj as THREE.Mesh).isMesh) {
-            const m = obj as THREE.Mesh;
-            m.geometry?.dispose();
-          }
-        });
-      }
-      engineRefs.current.colliders = [];
-      engineRefs.current.cullableProps = [];
-
-      const isNight = tod === "night" || tod === "sunset";
-
-      // 1. Base Earth Ground
-      const groundMat = new THREE.MeshStandardMaterial({
-        color: 0x1e242b,
-        roughness: 0.92,
-      });
-      const ground = new THREE.Mesh(new THREE.PlaneGeometry(1100, 1100), groundMat);
-      ground.rotation.x = -Math.PI / 2;
-      ground.receiveShadow = true;
-      worldGroup.add(ground);
-
-      // 2. Water Zones (PIK Sea / Ciliwung)
-      const waterMat = new THREE.MeshPhysicalMaterial({
-        color: 0x0369a1,
-        metalness: 0.35,
-        roughness: 0.12,
-        clearcoat: 1.0,
-        transparent: true,
-        opacity: 0.88,
-      });
-      layout.waterZones.forEach((wz) => {
-        const water = new THREE.Mesh(new THREE.PlaneGeometry(wz.width, wz.depth), waterMat);
-        water.rotation.x = -Math.PI / 2;
-        water.position.set(wz.x, 0.03, wz.z);
-        water.receiveShadow = true;
-        worldGroup.add(water);
-      });
-
-      // 3. Roads, Busway & Elevated Flyover
-      const asphaltTex = getAsphaltTexture(rain);
-      const buswayTex = getBuswayTexture();
-      const sidewalkTex = getSidewalkCurbTexture();
-
-      const roadMat = new THREE.MeshStandardMaterial({
-        map: asphaltTex,
-        roughness: rain ? 0.18 : 0.72,
-        metalness: rain ? 0.45 : 0.08,
-      });
-      const buswayMat = new THREE.MeshStandardMaterial({
-        map: buswayTex,
-        roughness: 0.6,
-      });
-      const curbMat = new THREE.MeshStandardMaterial({
-        map: sidewalkTex,
-        roughness: 0.85,
-      });
-
-      layout.roads.forEach((road) => {
-        for (let i = 0; i < road.points.length - 1; i++) {
-          const [x1, z1] = road.points[i];
-          const [x2, z2] = road.points[i + 1];
-          const dx = x2 - x1;
-          const dz = z2 - z1;
-          const len = Math.hypot(dx, dz);
-          if (len < 1) continue;
-          const angle = Math.atan2(dx, dz);
-          const elev = road.isFlyover ? road.elevation ?? 8.5 : 0;
-
-          const mesh = new THREE.Mesh(
-            new THREE.BoxGeometry(road.width, road.isFlyover ? 0.8 : 0.12, len),
-            road.isBusway ? buswayMat : roadMat
-          );
-          mesh.position.set((x1 + x2) / 2, elev + (road.isFlyover ? 0 : 0.04), (z1 + z2) / 2);
-          mesh.rotation.y = angle;
-          mesh.receiveShadow = true;
-          worldGroup.add(mesh);
-
-          // Curb sidewalks for main arterial roads
-          if (!road.isBusway && !road.isFlyover && road.width >= 15) {
-            const curb = new THREE.Mesh(
-              new THREE.BoxGeometry(road.width + 4, 0.09, len),
-              curbMat
-            );
-            curb.position.set((x1 + x2) / 2, 0.01, (z1 + z2) / 2);
-            curb.rotation.y = angle;
-            curb.receiveShadow = true;
-            worldGroup.add(curb);
-          }
-
-          // Flyover support pillars
-          if (road.isFlyover) {
-            const steps = Math.max(2, Math.floor(len / 45));
-            const pillarMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
-            for (let p = 1; p < steps; p++) {
-              const t = p / steps;
-              const px = x1 + dx * t;
-              const pz = z1 + dz * t;
-              const pillar = new THREE.Mesh(
-                new THREE.CylinderGeometry(1.1, 1.3, elev, 10),
-                pillarMat
-              );
-              pillar.position.set(px, elev / 2, pz);
-              pillar.castShadow = true;
-              worldGroup.add(pillar);
-            }
-          }
-        }
-      });
-
-      // Flyover access ramps on West & East ends
-      const rampGeo = new THREE.BoxGeometry(14, 0.6, 56);
-      const rampW = new THREE.Mesh(rampGeo, roadMat);
-      rampW.position.set(-345, 4.2, -150);
-      rampW.rotation.y = Math.PI / 2;
-      rampW.rotation.x = 0.155;
-      worldGroup.add(rampW);
-
-      const rampE = new THREE.Mesh(rampGeo, roadMat);
-      rampE.position.set(345, 4.2, -150);
-      rampE.rotation.y = -Math.PI / 2;
-      rampE.rotation.x = 0.155;
-      worldGroup.add(rampE);
-
-      // 4. Region Landmark at Plaza / Center
-      if (layout.region.id === "jakpus") {
-        // Bundaran HI Fountain & Monumen Selamat Datang
-        const pool = new THREE.Mesh(
-          new THREE.CylinderGeometry(15, 16, 0.8, 32),
-          new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.15 })
-        );
-        pool.position.set(0, 0.4, 0);
-        worldGroup.add(pool);
-
-        const pedestal = new THREE.Mesh(
-          new THREE.CylinderGeometry(2.2, 3.2, 14, 16),
-          new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.5 })
-        );
-        pedestal.position.set(0, 7, 0);
-        pedestal.castShadow = true;
-        worldGroup.add(pedestal);
-
-        const statues = new THREE.Mesh(
-          new THREE.OctahedronGeometry(2.4),
-          new THREE.MeshStandardMaterial({
-            color: 0xfacc15,
-            metalness: 0.85,
-            roughness: 0.2,
-          })
-        );
-        statues.position.set(0, 15.5, 0);
-        worldGroup.add(statues);
-      } else {
-        // Iconic Indonesian Welcome Arch
-        const archMat = new THREE.MeshStandardMaterial({
-          color: 0xff3e9d,
-          emissive: new THREE.Color(0xff3e9d),
-          emissiveIntensity: isNight ? 1.2 : 0.25,
-        });
-        const leftP = new THREE.Mesh(new THREE.BoxGeometry(1.4, 9, 1.4), archMat);
-        leftP.position.set(-12, 4.5, -24);
-        const rightP = new THREE.Mesh(new THREE.BoxGeometry(1.4, 9, 1.4), archMat);
-        rightP.position.set(12, 4.5, -24);
-        const topB = new THREE.Mesh(new THREE.BoxGeometry(25.6, 1.8, 1.6), archMat);
-        topB.position.set(0, 9.2, -24);
-        worldGroup.add(leftP, rightP, topB);
-      }
-
-      // 5. Buildings (Skyscrapers & Indonesian Ruko)
-      layout.buildings.forEach((b, idx) => {
-        const tex =
-          b.kind === "skyscraper"
-            ? getSkyscraperTexture(idx, isNight)
-            : getRukoTexture(
-                b.kind === "mall" ? "minimarket" : b.kind,
-                isNight
-              );
-
-        const mat = new THREE.MeshStandardMaterial({
-          map: tex,
-          roughness: b.kind === "skyscraper" ? 0.2 : 0.72,
-          metalness: b.kind === "skyscraper" ? 0.65 : 0.1,
-          emissive: isNight ? new THREE.Color(0x1e1b4b) : new THREE.Color(0x000000),
-          emissiveMap: isNight ? tex : null,
-          emissiveIntensity: isNight ? 0.55 : 0,
-        });
-
-        const bMesh = new THREE.Mesh(
-          new THREE.BoxGeometry(b.width, b.height, b.depth),
-          mat
-        );
-        bMesh.position.set(b.x, b.height / 2, b.z);
-        bMesh.castShadow = true;
-        bMesh.receiveShadow = true;
-        worldGroup.add(bMesh);
-        engineRefs.current.cullableProps.push(bMesh);
-
-        // Neon rooftop trim for skyscrapers
-        if (b.kind === "skyscraper" && isNight) {
-          const neonRoof = new THREE.Mesh(
-            new THREE.BoxGeometry(b.width + 0.4, 0.7, b.depth + 0.4),
-            new THREE.MeshBasicMaterial({
-              color: idx % 2 === 0 ? 0xff3e9d : 0x00f0ff,
-            })
-          );
-          neonRoof.position.set(b.x, b.height + 0.35, b.z);
-          worldGroup.add(neonRoof);
-          engineRefs.current.cullableProps.push(neonRoof);
-        }
-
-        engineRefs.current.colliders.push({
-          minX: b.x - b.width / 2,
-          maxX: b.x + b.width / 2,
-          minZ: b.z - b.depth / 2,
-          maxZ: b.z + b.depth / 2,
-          height: b.height,
-        });
-      });
-
-      // 6. SPBU Fuel & Repair Stations
-      const spbuTex = getSpbuTexture();
-      layout.spbuStations.forEach((spbu) => {
-        const spbuGroup = new THREE.Group();
-        spbuGroup.position.set(spbu.x, 0, spbu.z);
-
-        const canopy = new THREE.Mesh(
-          new THREE.BoxGeometry(16, 1.4, 10),
-          new THREE.MeshStandardMaterial({ map: spbuTex })
-        );
-        canopy.position.y = 5.4;
-        canopy.castShadow = true;
-        spbuGroup.add(canopy);
-
-        const pillarMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0 });
-        [-6, 6].forEach((px) => {
-          const p = new THREE.Mesh(new THREE.BoxGeometry(0.7, 5, 0.7), pillarMat);
-          p.position.set(px, 2.5, 0);
-          spbuGroup.add(p);
-        });
-
-        const pumpMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
-        [-2.5, 2.5].forEach((px) => {
-          const pump = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.1, 0.8), pumpMat);
-          pump.position.set(px, 1.05, 0);
-          spbuGroup.add(pump);
-        });
-
-        // Glowing green refuel & repair pad
-        const pad = new THREE.Mesh(
-          new THREE.RingGeometry(4.2, 4.9, 32),
-          new THREE.MeshBasicMaterial({
-            color: 0x22c55e,
-            side: THREE.DoubleSide,
-          })
-        );
-        pad.rotation.x = -Math.PI / 2;
-        pad.position.y = 0.08;
-        spbuGroup.add(pad);
-
-        worldGroup.add(spbuGroup);
-      });
-
-      // 7. Jasa Marga Green Overhead Highway Signs
-      layout.tollSigns.forEach((sign) => {
-        const gantry = new THREE.Group();
-        gantry.position.set(sign.x, 0, sign.z);
-        gantry.rotation.y = sign.rotation;
-
-        const poleMat = new THREE.MeshStandardMaterial({
-          color: 0x64748b,
-          metalness: 0.7,
-        });
-        [-11, 11].forEach((px) => {
-          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 8.5, 8), poleMat);
-          pole.position.set(px, 4.25, 0);
-          gantry.add(pole);
-        });
-
-        const board = new THREE.Mesh(
-          new THREE.BoxGeometry(16, 3.8, 0.35),
-          new THREE.MeshStandardMaterial({
-            map: getTollSignTexture(sign.label),
-            emissive: isNight ? new THREE.Color(0x0b4f2b) : new THREE.Color(0x000000),
-            emissiveIntensity: 0.35,
-          })
-        );
-        board.position.set(0, 7.2, 0);
-        gantry.add(board);
-        worldGroup.add(gantry);
-      });
-
-      // 8. Streetlights along main avenues (culled at distance)
-      const poleMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7 });
-      const bulbMat = new THREE.MeshBasicMaterial({
-        color: isNight ? 0xfef08a : 0xcbd5e1,
-      });
-      for (let z = -260; z <= 260; z += 55) {
-        if (Math.abs(z) < 25) continue;
-        [-12.5, 12.5].forEach((x) => {
-          const lightGroup = new THREE.Group();
-          lightGroup.position.set(x, 0, z);
-          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 7, 6), poleMat);
-          pole.position.y = 3.5;
-          const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 0.9), bulbMat);
-          bulb.position.set(x < 0 ? 0.6 : -0.6, 7.0, 0);
-          lightGroup.add(pole, bulb);
-          worldGroup.add(lightGroup);
-          engineRefs.current.cullableProps.push(lightGroup);
-        });
-      }
+      const isNight = tod === "night";
+      const built = buildJakartaCityScene(worldGroup, layout, isNight, rain);
+      engineRefs.current.colliders = built.colliders;
+      engineRefs.current.cullableProps = built.cullableProps;
+      engineRefs.current.trafficLights = built.trafficLights;
 
       applyEnvironmentLighting(tod, rain);
     },
     [applyEnvironmentLighting]
   );
 
-  // Spawn or replace player vehicle
+  // Capture Screenshot Jakarta (.PNG) with official watermark & live GPS
+  const handleTakeScreenshot = useCallback(() => {
+    const renderer = engineRefs.current.renderer;
+    const scene = engineRefs.current.scene;
+    const camera = engineRefs.current.camera;
+    if (!renderer || !scene || !camera) return;
+
+    renderer.render(scene, camera);
+    const glCanvas = renderer.domElement;
+
+    const out = document.createElement("canvas");
+    out.width = glCanvas.width;
+    out.height = glCanvas.height;
+    const ctx = out.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(glCanvas, 0, 0);
+
+    // Watermark & GPS Footer Stamp
+    const barH = Math.max(62, Math.round(out.height * 0.09));
+    ctx.fillStyle = "rgba(7, 8, 15, 0.82)";
+    ctx.fillRect(0, out.height - barH, out.width, barH);
+
+    ctx.fillStyle = "#ff3e9d";
+    ctx.fillRect(0, out.height - barH, out.width, 3);
+
+    const region = getRegionById(selectedRegionId);
+    const vehName =
+      VEHICLE_SPECS.find((v) => v.id === currentVehicleKind)?.name ?? "Kendaraan Jakarta";
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = `bold ${Math.max(16, Math.round(barH * 0.34))}px sans-serif`;
+    ctx.fillText(
+      `GTA Indonesia • Ahmad Alvin Griffin (Vinsky)`,
+      22,
+      out.height - barH + Math.round(barH * 0.44)
+    );
+
+    ctx.fillStyle = "#67e8f9";
+    ctx.font = `600 ${Math.max(12, Math.round(barH * 0.24))}px monospace`;
+    ctx.fillText(
+      `📍 ${region.areaLabel} (${region.title}) | GPS: ${gps.lat.toFixed(
+        5
+      )}, ${gps.lng.toFixed(5)} | 🚗 ${vehName}`,
+      22,
+      out.height - Math.round(barH * 0.18)
+    );
+
+    const link = document.createElement("a");
+    link.download = `GTA-Indonesia-Vinsky-${region.id}-${Date.now()}.png`;
+    link.href = out.toDataURL("image/png");
+    link.click();
+    soundEngine.playCashReward();
+    showToast("📸 Foto Screenshot Jakarta ber-watermark berhasil diunduh!");
+  }, [currentVehicleKind, gps.lat, gps.lng, selectedRegionId, showToast]);
+
   const spawnPlayerVehicle = useCallback(
     (kind: VehicleKind, overridePos?: { x: number; z: number }) => {
       const { scene, playerVehicle, character } = engineRefs.current;
@@ -721,7 +468,7 @@ export default function GTAIndonesiaGame() {
         simRef.current.vehX = overridePos.x;
         simRef.current.vehZ = overridePos.z;
       }
-      simRef.current.vehY = kind === "jet" ? 0 : 0;
+      simRef.current.vehY = 0;
       simRef.current.vehSpeed = 0;
       simRef.current.fuel = 100;
       simRef.current.vehHp = 100;
@@ -745,18 +492,16 @@ export default function GTAIndonesiaGame() {
       setInVehicle(true);
       setFuelPct(100);
       setVehicleHpPct(100);
-      showToast(`Kendaraan aktif: ${spec.name}`);
+      showToast(`🚗 Kendaraan aktif: ${spec.name}`);
     },
     [neonEnabled, rimColor, showToast]
   );
 
-  // Toggle Enter/Exit Vehicle (`F`)
   const toggleEnterExitVehicle = useCallback(() => {
     const { scene, playerVehicle, character } = engineRefs.current;
     if (!scene || !playerVehicle || !character) return;
 
     if (simRef.current.inVehicle) {
-      // Exit vehicle to driver door side
       const doorAngle = simRef.current.vehYaw - Math.PI / 2;
       simRef.current.charX = simRef.current.vehX + Math.sin(doorAngle) * 2.4;
       simRef.current.charZ = simRef.current.vehZ + Math.cos(doorAngle) * 2.4;
@@ -778,7 +523,6 @@ export default function GTAIndonesiaGame() {
         simRef.current.charZ - simRef.current.vehZ
       );
       if (dist > 8) {
-        // Bring vehicle closer or prompt
         showToast("Dekati kendaraanmu (< 8m) untuk masuk!");
         return;
       }
@@ -793,7 +537,6 @@ export default function GTAIndonesiaGame() {
     }
   }, [showToast]);
 
-  // Fire weapon (uses object pool!)
   const fireWeapon = useCallback(() => {
     if (simRef.current.inVehicle || simRef.current.paused) return;
     const pool = engineRefs.current.bulletPool;
@@ -815,7 +558,6 @@ export default function GTAIndonesiaGame() {
 
     soundEngine.playGunshot();
 
-    // Firing in public raises Wanted Level up to 5 stars
     if (simRef.current.wantedLevel < 5) {
       const nextW = Math.min(5, simRef.current.wantedLevel + 1);
       simRef.current.wantedLevel = nextW;
@@ -824,12 +566,10 @@ export default function GTAIndonesiaGame() {
     }
   }, [showToast]);
 
-  // Start Illegal Street Race
   const startStreetRace = useCallback(() => {
-    const { scene, worldGroup } = engineRefs.current;
-    if (!scene || !worldGroup) return;
+    const { scene } = engineRefs.current;
+    if (!scene) return;
 
-    // Clear previous AI racers
     engineRefs.current.aiRacers.forEach((r) => {
       scene.remove(r.mesh.group);
       r.mesh.dispose();
@@ -842,7 +582,7 @@ export default function GTAIndonesiaGame() {
       new THREE.Vector3(150, 0, 0),
       new THREE.Vector3(150, 0, 150),
       new THREE.Vector3(0, 0, 150),
-      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, 26),
     ];
     engineRefs.current.raceCheckpoints = cps;
 
@@ -862,26 +602,24 @@ export default function GTAIndonesiaGame() {
     engineRefs.current.raceMarkerMesh.visible = true;
     engineRefs.current.raceMarkerMesh.position.set(cps[0].x, 7, cps[0].z);
 
-    // Move player to start grid
     simRef.current.vehX = -3.2;
-    simRef.current.vehZ = 16;
+    simRef.current.vehZ = 28;
     simRef.current.vehYaw = Math.PI;
     simRef.current.vehSpeed = 0;
 
-    // Spawn 2 AI street race rivals
-    (["sport", "supercar"] as VehicleKind[]).forEach((kind, i) => {
+    (["bmw", "supercar"] as VehicleKind[]).forEach((kind, i) => {
       const rival = createVehicleMesh(kind, {
         paintColor: i === 0 ? "#00f0ff" : "#a855f7",
         plateText: `B 90${i} RCE`,
         neonEnabled: true,
       });
-      rival.group.position.set(3.2 + i * 3.8, 0, 16);
+      rival.group.position.set(3.2 + i * 3.8, 0, 28);
       rival.group.rotation.y = Math.PI;
       scene.add(rival.group);
       engineRefs.current.aiRacers.push({
         mesh: rival,
         progress: 0,
-        speed: 32 + i * 4,
+        speed: 34 + i * 4,
       });
     });
 
@@ -890,10 +628,9 @@ export default function GTAIndonesiaGame() {
     simRef.current.raceTimer = 0;
     setRaceStatus({ active: true, checkpoint: 1, total: cps.length, timeSec: 0 });
     setPhoneOpen(false);
-    showToast("🏁 BALAP LIAR DIMULAI! Kejar checkpoint neon!");
+    showToast("🏁 BALAP LIAR SUDIRMAN DIMULAI! Kejar checkpoint neon!");
   }, [showToast]);
 
-  // Fast Travel to any Jabodetabek region
   const handleFastTravel = useCallback(
     async (regionId: JabodetabekRegionId) => {
       setSelectedRegionId(regionId);
@@ -902,11 +639,11 @@ export default function GTAIndonesiaGame() {
       setMapSource(cached.source);
       buildCityWorld(cached, simRef.current.timeOfDay, simRef.current.isRaining);
 
-      simRef.current.vehX = 0;
-      simRef.current.vehZ = 22;
+      simRef.current.vehX = 4;
+      simRef.current.vehZ = 28;
       simRef.current.vehSpeed = 0;
-      simRef.current.charX = 4;
-      simRef.current.charZ = 22;
+      simRef.current.charX = 7;
+      simRef.current.charZ = 28;
       setGps({ lat: cached.region.lat, lng: cached.region.lng });
       showToast(`📍 Tiba di ${cached.region.areaLabel}: ${cached.region.title}`);
 
@@ -920,12 +657,13 @@ export default function GTAIndonesiaGame() {
     [buildCityWorld, showToast]
   );
 
-  // Start Game from Main Menu -> Cinematic Loading -> Playing
   const handleStartGame = useCallback(async () => {
     soundEngine.unlock();
     setStage("loading");
-    setLoadingPct(15);
-    setLoadingTip(`Mengunduh peta nyata OpenStreetMap ${getRegionById(selectedRegionId).title}...`);
+    setLoadingPct(18);
+    setLoadingTip(
+      `Membaca koordinat asli Jakarta (.GeoJSON) untuk ${getRegionById(selectedRegionId).title}...`
+    );
 
     const cached = getLocalCachedMapLayout(selectedRegionId);
     engineRefs.current.layout = cached;
@@ -933,37 +671,36 @@ export default function GTAIndonesiaGame() {
     setGps({ lat: cached.region.lat, lng: cached.region.lng });
 
     setTimeout(() => {
-      setLoadingPct(55);
-      setLoadingTip("Memuat model 3D .GLB & Auto-Scale Kabin Pengemudi...");
-    }, 350);
+      setLoadingPct(58);
+      setLoadingTip("Memuat model 3D Avanza, Innova, Mercy, BMW, TransJakarta & Auto-Scale Kabin...");
+    }, 320);
 
-    // Fetch live OSM silently with timeout guard
     const liveLayout = await Promise.race([
       fetchJabodetabekMapOSM(selectedRegionId),
-      new Promise<MapLayoutData>((res) => setTimeout(() => res(cached), 2200)),
+      new Promise<MapLayoutData>((res) => setTimeout(() => res(cached), 2000)),
     ]);
 
     engineRefs.current.layout = liveLayout;
     setMapSource(liveLayout.source);
-    setLoadingPct(90);
-    setLoadingTip("Mengaktifkan PBR Shader ACESFilmic & Audio Telolet Basuri...");
+    setLoadingPct(92);
+    setLoadingTip("Menyalakan Lalu Lintas Rush Hour Jakarta & Radio FM...");
 
     setTimeout(() => {
       setLoadingPct(100);
       setStage("playing");
-    }, 350);
+    }, 320);
   }, [selectedRegionId]);
 
-  // Initialize Three.js World & 60fps Game Loop when entering "playing"
+  // Three.js Engine Initialization + 60fps Game Loop
   useEffect(() => {
     if (stage !== "playing") return;
     const container = mountRef.current;
     if (!container) return;
 
-    // 1. Renderer
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: "high-performance",
+      preserveDrawingBuffer: true, // Enables crisp instant Screenshot PNG capture
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -974,25 +711,23 @@ export default function GTAIndonesiaGame() {
     container.innerHTML = "";
     container.appendChild(renderer.domElement);
 
-    // 2. Scene & Camera
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(
       65,
       container.clientWidth / container.clientHeight,
       0.2,
-      580
+      600
     );
 
-    // 3. Lights
-    const ambientLight = new THREE.HemisphereLight(0xf9a8d4, 0x1e1b4b, 0.9);
+    const ambientLight = new THREE.HemisphereLight(0xf0f9ff, 0x475569, 1.3);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xff7b39, 2.2);
+    const sunLight = new THREE.DirectionalLight(0xfffbeb, 2.3);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.set(1024, 1024);
     sunLight.shadow.camera.near = 5;
     sunLight.shadow.camera.far = 360;
-    const d = 95;
+    const d = 100;
     sunLight.shadow.camera.left = -d;
     sunLight.shadow.camera.right = d;
     sunLight.shadow.camera.top = d;
@@ -1002,7 +737,7 @@ export default function GTAIndonesiaGame() {
     const worldGroup = new THREE.Group();
     scene.add(worldGroup);
 
-    // 4. Pooled Rain Particles (Object Pool)
+    // Rain Particle Pool
     const RAIN_COUNT = 900;
     const rainPositions = new Float32Array(RAIN_COUNT * 3);
     for (let i = 0; i < RAIN_COUNT; i++) {
@@ -1022,7 +757,7 @@ export default function GTAIndonesiaGame() {
     rainPoints.visible = simRef.current.isRaining;
     scene.add(rainPoints);
 
-    // 5. Pooled Bullets (Object Pool)
+    // Pooled Bullets
     const bulletGeo = new THREE.SphereGeometry(0.12, 6, 6);
     const bulletMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
     const bulletPool: BulletItem[] = [];
@@ -1033,7 +768,6 @@ export default function GTAIndonesiaGame() {
       bulletPool.push({ mesh: m, active: false, vel: new THREE.Vector3(), life: 0 });
     }
 
-    // 6. Character & Initial Player Vehicle
     const character = createCharacterMesh();
     scene.add(character.group);
 
@@ -1052,40 +786,81 @@ export default function GTAIndonesiaGame() {
       simRef.current.timeOfDay,
       simRef.current.isRaining
     );
-    spawnPlayerVehicle(selectedStartVehicle, { x: 0, z: 22 });
+    spawnPlayerVehicle(selectedStartVehicle, { x: 4, z: 28 });
 
-    // 7. Ambient Traffic Cars (Object Pool)
+    // 32 Rush-Hour Jakarta AI Traffic Vehicles (Avanza, Innova, Mercy, BMW, Civic, Bus TransJakarta, Bluebird, Angkot, Motor)
     const trafficPool: TrafficUnit[] = [];
-    const trafficKinds: VehicleKind[] = ["angkot", "sedan", "hatchback", "bus_transjakarta", "suv"];
-    for (let i = 0; i < 8; i++) {
+    const trafficKinds: VehicleKind[] = [
+      "avanza",
+      "innova",
+      "bluebird",
+      "mercy",
+      "bmw",
+      "civic",
+      "bus_transjakarta",
+      "angkot",
+      "motor",
+      "suv",
+    ];
+    const trafficColors = [
+      "#e2e8f0",
+      "#1e293b",
+      "#38bdf8",
+      "#cbd5e1",
+      "#1d4ed8",
+      "#f8fafc",
+      "#0284c7",
+      "#06b6d4",
+      "#111827",
+      "#475569",
+    ];
+    const laneRoads = [-150, -90, 0, 90, 150];
+
+    for (let i = 0; i < 32; i++) {
       const kind = trafficKinds[i % trafficKinds.length];
       const v = createVehicleMesh(kind, {
-        paintColor: ["#06b6d4", "#f8fafc", "#facc15", "#0284c7", "#1e293b"][i % 5],
+        paintColor: trafficColors[i % trafficColors.length],
+        plateText: `B ${1200 + i * 73} JKT`,
       });
-      const axis = i % 2 === 0 ? "ns" : "ew";
-      const dir = i % 4 < 2 ? 1 : -1;
-      const laneOffset = axis === "ns" ? (dir > 0 ? 4.5 : -4.5) : dir > 0 ? 4.5 : -4.5;
-      const x = axis === "ns" ? laneOffset : -220 + i * 55;
-      const z = axis === "ns" ? -220 + i * 55 : laneOffset;
-      const yaw = axis === "ns" ? (dir > 0 ? 0 : Math.PI) : dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      const isBus = kind === "bus_transjakarta";
+      const axis: "ns" | "ew" = isBus ? "ns" : i % 2 === 0 ? "ns" : "ew";
+      const dir: 1 | -1 = i % 4 < 2 ? 1 : -1;
+      const roadCoord = isBus ? 0 : laneRoads[i % laneRoads.length];
+      const laneOffset = isBus ? -4.5 : dir > 0 ? 4.8 : -4.8;
+      const progress = -250 + ((i * 37) % 500);
+
+      const x = axis === "ns" ? roadCoord + laneOffset : progress;
+      const z = axis === "ns" ? progress : roadCoord + laneOffset;
+      const yaw =
+        axis === "ns" ? (dir > 0 ? 0 : Math.PI) : dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+
       v.group.position.set(x, 0, z);
       v.group.rotation.y = yaw;
       scene.add(v.group);
-      trafficPool.push({ mesh: v, x, z, yaw, speed: 12 + (i % 3) * 3, axis, dir });
+      const baseSpeed = 11 + (i % 4) * 3;
+      trafficPool.push({
+        mesh: v,
+        x,
+        z,
+        yaw,
+        baseSpeed,
+        curSpeed: baseSpeed,
+        axis,
+        dir,
+      });
     }
     engineRefs.current.trafficPool = trafficPool;
 
-    // 8. Police PJR Pool (up to 5 chasing units)
+    // Police PJR Pool
     const policePool: PoliceUnit[] = [];
     for (let i = 0; i < 5; i++) {
       const pv = createVehicleMesh("police_pjr");
       pv.group.visible = false;
       scene.add(pv.group);
-      policePool.push({ mesh: pv, x: 90 + i * 25, z: -120, yaw: 0, speed: 0 });
+      policePool.push({ mesh: pv, x: 90 + i * 25, z: -120, yaw: 0 });
     }
     engineRefs.current.policePool = policePool;
 
-    // Resize listener
     const handleResize = () => {
       if (!container || !renderer || !camera) return;
       camera.aspect = container.clientWidth / container.clientHeight;
@@ -1094,7 +869,6 @@ export default function GTAIndonesiaGame() {
     };
     window.addEventListener("resize", handleResize);
 
-    // Pre-allocated math helpers for Frustum Culling & Camera
     const frustum = new THREE.Frustum();
     const projScreenMatrix = new THREE.Matrix4();
     const tmpVec = new THREE.Vector3();
@@ -1116,8 +890,20 @@ export default function GTAIndonesiaGame() {
       const veh = engineRefs.current.playerVehicle;
       const char = engineRefs.current.character;
 
+      // Traffic Signal Cycle (12s cycle: 0..5 NS Green, 5..6 NS Yellow, 6..11 EW Green, 11..12 EW Yellow)
+      const cycle = timeSec % 12;
+      const nsRed = cycle >= 6;
+      const ewRed = cycle < 6;
+      for (const tl of engineRefs.current.trafficLights) {
+        tl.redNS.color.setHex(nsRed ? 0xef4444 : 0x27272a);
+        tl.yellowNS.color.setHex(cycle >= 5 && cycle < 6 ? 0xfacc15 : 0x27272a);
+        tl.greenNS.color.setHex(cycle < 5 ? 0x22c55e : 0x27272a);
+        tl.redEW.color.setHex(ewRed ? 0xef4444 : 0x27272a);
+        tl.yellowEW.color.setHex(cycle >= 11 ? 0xfacc15 : 0x27272a);
+        tl.greenEW.color.setHex(cycle >= 6 && cycle < 11 ? 0x22c55e : 0x27272a);
+      }
+
       if (!s.paused && veh && char) {
-        // Combine Keyboard & Touch input
         const throttle = Math.max(
           -1,
           Math.min(1, inp.throttle + (inp.touchGas ? 1 : 0) - (inp.touchBrake ? 1 : 0) - inp.joyY)
@@ -1127,14 +913,12 @@ export default function GTAIndonesiaGame() {
         const targetX = s.inVehicle ? s.vehX : s.charX;
         const targetZ = s.inVehicle ? s.vehZ : s.charZ;
 
-        // Check water overlap
         const inWater = engineRefs.current.layout.waterZones.some(
           (w) =>
             Math.abs(targetX - w.x) < w.width / 2 &&
             Math.abs(targetZ - w.z) < w.depth / 2
         );
 
-        // Check Flyover elevation
         const onFlyoverRamp =
           Math.abs(targetZ + 150) < 9 &&
           ((targetX > -375 && targetX < -315) || (targetX > 315 && targetX < 375));
@@ -1156,8 +940,11 @@ export default function GTAIndonesiaGame() {
             s.vehSpeed *= 0.96;
           } else if (throttle > 0.05) {
             const accel = spec.acceleration * stageMult * (useNitro ? 1.65 : 1.0);
-            s.vehSpeed = Math.min(maxSpdMs * (useNitro ? 1.18 : 1), s.vehSpeed + accel * throttle * dt);
-            s.fuel = Math.max(0, s.fuel - dt * 0.55);
+            s.vehSpeed = Math.min(
+              maxSpdMs * (useNitro ? 1.18 : 1),
+              s.vehSpeed + accel * throttle * dt
+            );
+            s.fuel = Math.max(0, s.fuel - dt * 0.5);
           } else if (throttle < -0.05) {
             if (s.vehSpeed > 1) {
               s.vehSpeed = Math.max(0, s.vehSpeed - 38 * dt);
@@ -1165,12 +952,10 @@ export default function GTAIndonesiaGame() {
               s.vehSpeed = Math.max(-maxSpdMs * 0.35, s.vehSpeed + 18 * throttle * dt);
             }
           } else {
-            // Natural rolling drag
             s.vehSpeed *= Math.pow(0.45, dt);
             if (Math.abs(s.vehSpeed) < 0.1) s.vehSpeed = 0;
           }
 
-          // Handbrake drift physics
           const drifting = inp.brake && Math.abs(s.vehSpeed) > 6;
           if (inp.brake && !drifting) {
             s.vehSpeed *= Math.pow(0.05, dt);
@@ -1178,13 +963,11 @@ export default function GTAIndonesiaGame() {
             s.vehSpeed *= Math.pow(0.75, dt);
           }
 
-          // Steering
           const speedFactor = Math.min(1, Math.abs(s.vehSpeed) / 7);
           const turnDir = s.vehSpeed >= -0.2 ? 1 : -1;
           const steerGain = spec.handling * (drifting ? 1.45 : 1.0) * speedFactor * turnDir;
           s.vehYaw += steer * steerGain * dt;
 
-          // Aircraft pitch/altitude vs Ground/Boat movement
           let nextX = s.vehX + Math.sin(s.vehYaw) * s.vehSpeed * dt;
           let nextZ = s.vehZ + Math.cos(s.vehYaw) * s.vehSpeed * dt;
 
@@ -1196,9 +979,8 @@ export default function GTAIndonesiaGame() {
             }
           } else if (spec.isBoat) {
             s.vehY = inWater ? Math.sin(timeSec * 3.5) * 0.14 : 0;
-            if (!inWater) s.vehSpeed *= 0.9; // Slower on land
+            if (!inWater) s.vehSpeed *= 0.9;
           } else {
-            // Flyover height or ground
             if (onFlyoverDeck && s.vehY > 4) {
               s.vehY = 8.9;
             } else if (onFlyoverRamp) {
@@ -1210,14 +992,21 @@ export default function GTAIndonesiaGame() {
             } else {
               s.vehY = 0;
             }
-            if (inWater) {
-              s.vehSpeed *= 0.85;
-            }
+            if (inWater) s.vehSpeed *= 0.85;
           }
 
-          // World bounds & building collision
           nextX = Math.max(-390, Math.min(390, nextX));
           nextZ = Math.max(-390, Math.min(390, nextZ));
+
+          // Bundaran HI center pool collider
+          if (engineRefs.current.layout.region.id === "jakpus" && s.vehY < 4) {
+            const distHI = Math.hypot(nextX, nextZ);
+            if (distHI < 20.5) {
+              nextX = (nextX / Math.max(0.1, distHI)) * 20.5;
+              nextZ = (nextZ / Math.max(0.1, distHI)) * 20.5;
+              s.vehSpeed *= 0.5;
+            }
+          }
 
           if (s.vehY < 6) {
             const margin = 2.1;
@@ -1228,12 +1017,9 @@ export default function GTAIndonesiaGame() {
                 nextZ > c.minZ - margin &&
                 nextZ < c.maxZ + margin
               ) {
-                // Bounce back & minor damage
                 nextX = s.vehX;
                 nextZ = s.vehZ;
-                if (Math.abs(s.vehSpeed) > 10) {
-                  s.vehHp = Math.max(10, s.vehHp - 4);
-                }
+                if (Math.abs(s.vehSpeed) > 10) s.vehHp = Math.max(10, s.vehHp - 4);
                 s.vehSpeed *= -0.3;
                 break;
               }
@@ -1243,7 +1029,6 @@ export default function GTAIndonesiaGame() {
           s.vehX = nextX;
           s.vehZ = nextZ;
 
-          // CDID suspension pitch & body roll
           const targetRoll = -steer * Math.min(0.08, Math.abs(s.vehSpeed) * 0.0022);
           const targetPitch =
             throttle > 0.1 && s.vehSpeed < maxSpdMs * 0.8
@@ -1257,7 +1042,6 @@ export default function GTAIndonesiaGame() {
           veh.group.position.set(s.vehX, s.vehY, s.vehZ);
           veh.group.rotation.set(s.vehPitch, s.vehYaw, s.vehRoll);
 
-          // Spin wheels
           const wheelSpin = s.vehSpeed * dt * 2.4;
           veh.wheels.forEach((w) => {
             w.rotation.x += wheelSpin;
@@ -1270,24 +1054,21 @@ export default function GTAIndonesiaGame() {
             rightTurn: s.rightTurn,
             hazard: s.hazard,
             timeSec,
-            policeActive: spec.isPolice ? true : false,
+            policeActive: Boolean(spec.isPolice),
           });
 
-          // SPBU Refuel & Repair Check
           for (const spbu of engineRefs.current.layout.spbuStations) {
             const distSpbu = Math.hypot(s.vehX - spbu.x, s.vehZ - spbu.z);
             if (distSpbu < 6 && (s.fuel < 99 || s.vehHp < 99)) {
               s.fuel = 100;
               s.vehHp = 100;
               soundEngine.playCashReward();
-              showToast(`⛽ ${spbu.name}: Bensin & Body 100% Penuh!`);
+              showToast(`⛽ ${spbu.name}: Bensin & Bodi 100% Penuh!`);
             }
           }
 
-          // Engine Sound
           soundEngine.updateEngine(Math.abs(s.vehSpeed) * 3.6, true, useNitro);
         } else {
-          // On-foot walking, parkour jumping & swimming
           soundEngine.updateEngine(0, false);
           const moveSpeed = (inp.nitro ? 11.5 : 6.2) * (inWater ? 0.65 : 1);
           s.charYaw += steer * 3.0 * dt;
@@ -1340,7 +1121,7 @@ export default function GTAIndonesiaGame() {
           });
         }
 
-        // Update pooled bullets
+        // Bullets
         for (const b of engineRefs.current.bulletPool) {
           if (!b.active) continue;
           b.life -= dt;
@@ -1351,22 +1132,64 @@ export default function GTAIndonesiaGame() {
           }
         }
 
-        // Update Traffic Pool
+        // 32 Rush-Hour Traffic Units stopping smoothly at Red Traffic Lights (±90m intersections)
         for (const tr of engineRefs.current.trafficPool) {
-          if (tr.axis === "ns") {
-            tr.z += tr.dir * tr.speed * dt;
-            if (tr.z > 280) tr.z = -280;
-            if (tr.z < -280) tr.z = 280;
-          } else {
-            tr.x += tr.dir * tr.speed * dt;
-            if (tr.x > 280) tr.x = -280;
-            if (tr.x < -280) tr.x = 280;
+          let mustStop = false;
+          if (tr.axis === "ns" && nsRed) {
+            const ahead90 = (90 - tr.z) * tr.dir;
+            const aheadNeg90 = (-90 - tr.z) * tr.dir;
+            if ((ahead90 > 8 && ahead90 < 22) || (aheadNeg90 > 8 && aheadNeg90 < 22)) {
+              mustStop = true;
+            }
+          } else if (tr.axis === "ew" && ewRed) {
+            const ahead90 = (90 - tr.x) * tr.dir;
+            const aheadNeg90 = (-90 - tr.x) * tr.dir;
+            if ((ahead90 > 8 && ahead90 < 22) || (aheadNeg90 > 8 && aheadNeg90 < 22)) {
+              mustStop = true;
+            }
           }
-          tr.mesh.group.position.set(tr.x, 0, tr.z);
-          tr.mesh.wheels.forEach((w) => (w.rotation.x += tr.speed * dt * 2));
+
+          // Also slow down if player car is right ahead
+          const distPlayer = Math.hypot(tr.x - targetX, tr.z - targetZ);
+          if (distPlayer < 9) mustStop = true;
+
+          const desiredSpeed = mustStop ? 0 : tr.baseSpeed;
+          tr.curSpeed += (desiredSpeed - tr.curSpeed) * 5 * dt;
+
+          if (tr.axis === "ns") {
+            tr.z += tr.dir * tr.curSpeed * dt;
+            if (tr.z > 290) tr.z = -290;
+            if (tr.z < -290) tr.z = 290;
+          } else {
+            tr.x += tr.dir * tr.curSpeed * dt;
+            if (tr.x > 290) tr.x = -290;
+            if (tr.x < -290) tr.x = 290;
+          }
+
+          // Smoothly deflect around Bundaran HI roundabout if on central corridor
+          let renderX = tr.x;
+          let renderZ = tr.z;
+          const centerDist = Math.hypot(renderX, renderZ);
+          if (centerDist < 22.5) {
+            const ang = Math.atan2(renderX, renderZ);
+            renderX = Math.sin(ang) * 23;
+            renderZ = Math.cos(ang) * 23;
+          }
+
+          tr.mesh.group.position.set(renderX, 0, renderZ);
+          tr.mesh.wheels.forEach((w) => (w.rotation.x += tr.curSpeed * dt * 2));
+          tr.mesh.setLightsState({
+            headlightsOn: s.headlightsOn,
+            braking: mustStop,
+            leftTurn: false,
+            rightTurn: false,
+            hazard: false,
+            timeSec,
+            policeActive: false,
+          });
         }
 
-        // Update Police PJR Chase (Wanted Level 1..5)
+        // Police PJR Pursuit
         const activePoliceCount = s.wantedLevel;
         soundEngine.updatePoliceSiren(activePoliceCount > 0, timeSec);
         engineRefs.current.policePool.forEach((pol, idx) => {
@@ -1402,7 +1225,7 @@ export default function GTAIndonesiaGame() {
           });
         });
 
-        // Update Illegal Street Race
+        // Street Race
         if (s.raceActive) {
           s.raceTimer += dt;
           const cps = engineRefs.current.raceCheckpoints;
@@ -1428,7 +1251,6 @@ export default function GTAIndonesiaGame() {
               }
             }
           }
-          // AI Racers follow checkpoint path
           engineRefs.current.aiRacers.forEach((r) => {
             const targetIdx = Math.floor(r.progress) % cps.length;
             const target = cps[targetIdx];
@@ -1446,7 +1268,7 @@ export default function GTAIndonesiaGame() {
           });
         }
 
-        // Update Rain Particle Pool around camera
+        // Rain
         if (s.isRaining && engineRefs.current.rainPoints) {
           const posAttr = engineRefs.current.rainPoints.geometry.getAttribute(
             "position"
@@ -1460,7 +1282,7 @@ export default function GTAIndonesiaGame() {
           engineRefs.current.rainPoints.position.set(targetX, 0, targetZ);
         }
 
-        // Camera Positioning (Chase, Hood, Cockpit)
+        // Camera (Chase / Hood / Cockpit)
         const anchorX = s.inVehicle ? s.vehX : s.charX;
         const anchorY = s.inVehicle ? s.vehY : s.charY;
         const anchorZ = s.inVehicle ? s.vehZ : s.charZ;
@@ -1487,8 +1309,11 @@ export default function GTAIndonesiaGame() {
           );
           camera.lookAt(camLookTarget);
         } else {
-          // Chase Camera
-          const distBack = s.inVehicle ? (veh.kind === "bus_transjakarta" || veh.kind === "jet" ? 13.5 : 8.5) : 5.2;
+          const distBack = s.inVehicle
+            ? veh.kind === "bus_transjakarta" || veh.kind === "jet"
+              ? 13.5
+              : 8.5
+            : 5.2;
           const heightUp = s.inVehicle ? (veh.kind === "bus_transjakarta" ? 5.2 : 3.4) : 2.6;
           camTargetPos.set(
             anchorX - Math.sin(anchorYaw) * distBack,
@@ -1504,14 +1329,13 @@ export default function GTAIndonesiaGame() {
           camera.lookAt(camLookTarget);
         }
 
-        // Dynamic Nitro FOV
         const targetFov = s.inVehicle && inp.nitro && s.nitro > 1 && throttle > 0 ? 78 : 65;
         if (Math.abs(camera.fov - targetFov) > 0.2) {
           camera.fov += (targetFov - camera.fov) * 6 * dt;
           camera.updateProjectionMatrix();
         }
 
-        // Frustum Culling for distant decorative city objects
+        // Frustum Culling
         camera.updateMatrixWorld();
         projScreenMatrix.multiplyMatrices(
           camera.projectionMatrix,
@@ -1522,10 +1346,10 @@ export default function GTAIndonesiaGame() {
           prop.getWorldPosition(tmpVec);
           const distSq =
             (tmpVec.x - camera.position.x) ** 2 + (tmpVec.z - camera.position.z) ** 2;
-          prop.visible = distSq < 340 * 340 && frustum.containsPoint(tmpVec);
+          prop.visible = distSq < 360 * 360 && frustum.containsPoint(tmpVec);
         }
 
-        // Throttled React HUD state sync (~10 Hz to avoid React re-render overhead)
+        // 10Hz HUD Sync
         hudSyncAccum += dt;
         if (hudSyncAccum >= 0.1) {
           hudSyncAccum = 0;
@@ -1590,7 +1414,8 @@ export default function GTAIndonesiaGame() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.code === "Escape") {
         e.preventDefault();
-        setPaused((p) => !p);
+        if (howToPlayOpen) setHowToPlayOpen(false);
+        else setPaused((p) => !p);
         return;
       }
       if (e.code === "KeyP") {
@@ -1610,6 +1435,14 @@ export default function GTAIndonesiaGame() {
       if (e.code === "KeyH") {
         soundEngine.playTeloletBasuri();
         showToast("🎺 KLAKSON TELOLET BASURI V3!");
+        return;
+      }
+      if (e.code === "KeyR") {
+        setRadioChannelIndex((idx) => {
+          const next = (idx + 1) % JAKARTA_RADIO_CHANNELS.length;
+          showToast(`📻 Radio: ${JAKARTA_RADIO_CHANNELS[next].name}`);
+          return next;
+        });
         return;
       }
       if (e.code === "KeyQ") {
@@ -1646,9 +1479,9 @@ export default function GTAIndonesiaGame() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [stage, toggleEnterExitVehicle, showToast]);
+  }, [stage, howToPlayOpen, toggleEnterExitVehicle, showToast]);
 
-  // Touch Virtual Joystick Handlers
+  // Touch Joystick Handlers
   const handleJoystickStart = (e: React.TouchEvent<HTMLDivElement>) => {
     const t = e.touches[0];
     if (!t) return;
@@ -1688,26 +1521,37 @@ export default function GTAIndonesiaGame() {
   if (stage === "menu" || stage === "loading") {
     return (
       <div className="relative min-h-screen w-full overflow-y-auto bg-[#07080f] text-white">
-        {/* GTA VI Sunset Atmospheric Backdrop */}
+        {/* Atmospheric Jakarta Sunset Backdrop */}
         <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(255,62,157,0.28),_transparent_55%),radial-gradient(ellipse_at_bottom_right,_rgba(255,140,56,0.24),_transparent_50%),linear-gradient(180deg,_#090517_0%,_#1b0a2b_55%,_#07080f_100%)]" />
 
-        <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-8 sm:py-8">
-          {/* Official Hero Title */}
+        <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-5 px-4 py-6 sm:px-8 sm:py-8">
           <header className="flex flex-col items-center text-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-pink-500/40 bg-pink-500/10 px-4 py-1 text-xs font-bold uppercase tracking-widest text-pink-300">
-              Open-World 3D • OpenStreetMap Real-World • 100% Gratis
+            <span className="inline-flex items-center gap-2 rounded-full border border-pink-500/40 bg-pink-500/15 px-4 py-1 text-xs font-bold uppercase tracking-widest text-pink-200 shadow">
+              Open-World 3D • Peta Nyata Jakarta (.GeoJSON) • 100% Gratis
             </span>
             <h1 className="mt-3 bg-gradient-to-r from-pink-400 via-orange-300 to-amber-300 bg-clip-text text-5xl font-black tracking-tighter text-transparent sm:text-7xl drop-shadow">
               GTA INDONESIA
             </h1>
-            <p className="mt-1.5 text-base font-bold tracking-wide text-cyan-300 sm:text-xl">
-              by Ahmad Alvin Griffin (Vinsky)
-            </p>
+
+            {/* High-Contrast Creator Badge with Portfolio Link */}
+            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/50 bg-slate-950/90 px-5 py-1.5 text-sm sm:text-base shadow-xl backdrop-blur-md">
+              <span className="text-slate-300 font-medium">by</span>
+              <CreatorLink />
+            </div>
+
+            {/* Prominent Panduan Main Button */}
+            <button
+              onClick={() => setHowToPlayOpen(true)}
+              className="mt-3.5 inline-flex items-center gap-2 rounded-full border border-amber-400/50 bg-amber-500/15 px-5 py-2 text-xs sm:text-sm font-black text-amber-200 hover:bg-amber-500/25 shadow-lg transition"
+            >
+              <BookOpen className="h-4 w-4 text-amber-300" />
+              📖 Panduan Main & Fitur (Cara Kontrol, Radio, Street View)
+            </button>
           </header>
 
           {stage === "loading" ? (
-            <div className="mx-auto mt-10 w-full max-w-xl rounded-3xl border border-pink-500/40 bg-slate-950/90 p-8 text-center shadow-2xl">
-              <p className="text-xl font-black text-white">MEMUAT DUNIA JABODETABEK...</p>
+            <div className="mx-auto mt-8 w-full max-w-xl rounded-3xl border border-pink-500/40 bg-slate-950/90 p-8 text-center shadow-2xl">
+              <p className="text-xl font-black text-white">MEMUAT KOTA JAKARTA...</p>
               <p className="mt-2 text-sm text-slate-300">{loadingTip}</p>
               <div className="mt-6 h-4 w-full overflow-hidden rounded-full bg-slate-800 p-0.5">
                 <div
@@ -1720,15 +1564,17 @@ export default function GTAIndonesiaGame() {
           ) : (
             <>
               {/* Device Control Mode Selector */}
-              <section className="rounded-3xl border border-white/10 bg-slate-950/75 p-4 sm:p-5 backdrop-blur-md">
+              <section className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-5 backdrop-blur-md">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                   <h2 className="text-sm font-black uppercase tracking-wider text-orange-300">
                     1. Pilih Mode Kontrol Perangkat
                   </h2>
                   <span className="text-xs text-slate-400">
-                    Terdeteksi saat ini:{" "}
+                    Terdeteksi:{" "}
                     <strong className="text-cyan-300">
-                      {resolvedMobile ? "📱 Layar Sentuh (HP/Tablet)" : "💻 Keyboard & Mouse (PC/Laptop)"}
+                      {resolvedMobile
+                        ? "📱 Layar Sentuh (HP/Tablet)"
+                        : "💻 Keyboard & Mouse (Laptop/PC)"}
                     </strong>
                   </span>
                 </div>
@@ -1746,7 +1592,7 @@ export default function GTAIndonesiaGame() {
                     <div>
                       <p className="text-sm font-bold">Auto-Detect (Direkomendasikan)</p>
                       <p className="mt-0.5 text-xs text-slate-300">
-                        Otomatis menyesuaikan layar sentuh HP atau keyboard Laptop.
+                        Otomatis mendeteksi layar sentuh HP atau keyboard Laptop.
                       </p>
                     </div>
                   </button>
@@ -1780,7 +1626,7 @@ export default function GTAIndonesiaGame() {
                     <div>
                       <p className="text-sm font-bold">💻 Mode Laptop / PC</p>
                       <p className="mt-0.5 text-xs text-slate-300">
-                        Tombol sentuh disembunyikan + panduan shortcut WASD, Space, Shift, F, C, H.
+                        Layar bersih + panduan shortcut WASD, Space, Shift, F, C, H, R, P.
                       </p>
                     </div>
                   </button>
@@ -1788,9 +1634,9 @@ export default function GTAIndonesiaGame() {
               </section>
 
               {/* Spawn Wilayah Jabodetabek */}
-              <section className="rounded-3xl border border-white/10 bg-slate-950/75 p-4 sm:p-5 backdrop-blur-md">
+              <section className="rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:p-5 backdrop-blur-md">
                 <h2 className="mb-3 text-sm font-black uppercase tracking-wider text-pink-300">
-                  2. Pilih Titik Spawn Jabodetabek (Peta Nyata OSM)
+                  2. Pilih Titik Spawn Jakarta & Jabodetabek (Data Asli OSM)
                 </h2>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {JABODETABEK_REGIONS.map((reg) => (
@@ -1819,23 +1665,24 @@ export default function GTAIndonesiaGame() {
               </section>
 
               {/* Starting Vehicle + Launch */}
-              <section className="flex flex-col items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-950/80 p-4 sm:flex-row sm:p-5">
+              <section className="flex flex-col items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-950/85 p-4 sm:flex-row sm:p-5">
                 <div className="w-full sm:w-auto">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                    3. Kendaraan Awal Garasi Vinsky
+                    3. Pilih Mobil Jalanan Jakarta / CDID Awal
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {(
                       [
-                        "supercar",
-                        "sport",
-                        "sedan",
-                        "suv",
+                        "avanza",
+                        "innova",
+                        "mercy",
+                        "bmw",
+                        "civic",
+                        "bluebird",
                         "bus_transjakarta",
-                        "police_pjr",
                         "angkot",
-                        "speedboat",
-                        "jet",
+                        "police_pjr",
+                        "supercar",
                       ] as VehicleKind[]
                     ).map((vk) => {
                       const sp = VEHICLE_SPECS.find((s) => s.id === vk)!;
@@ -1860,12 +1707,14 @@ export default function GTAIndonesiaGame() {
                   onClick={handleStartGame}
                   className="animate-pulse-glow flex w-full shrink-0 items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-pink-500 via-orange-500 to-amber-500 px-8 py-4 text-base font-black tracking-wide text-white shadow-xl hover:scale-[1.02] active:scale-95 transition sm:w-auto"
                 >
-                  <Play className="h-5 w-5 fill-white" /> MASUK KOTA JABODETABEK
+                  <Play className="h-5 w-5 fill-white" /> MASUK KOTA JAKARTA
                 </button>
               </section>
             </>
           )}
         </div>
+
+        <HowToPlayModal isOpen={howToPlayOpen} onClose={() => setHowToPlayOpen(false)} />
       </div>
     );
   }
@@ -1877,11 +1726,18 @@ export default function GTAIndonesiaGame() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-black">
-      {/* Three.js Canvas Mount */}
+      {/* Three.js Canvas */}
       <div
         ref={mountRef}
         onMouseDown={() => {
-          if (!resolvedMobile && !simRef.current.inVehicle && !phoneOpen && !paused && !activeMinigame) {
+          if (
+            !resolvedMobile &&
+            !simRef.current.inVehicle &&
+            !phoneOpen &&
+            !paused &&
+            !howToPlayOpen &&
+            !activeMinigame
+          ) {
             inputRef.current.shoot = true;
             fireWeapon();
           }
@@ -1902,9 +1758,9 @@ export default function GTAIndonesiaGame() {
 
       {/* Top HUD Bar */}
       <div className="pointer-events-none fixed top-0 left-0 right-0 z-20 flex items-start justify-between p-2.5 sm:p-4">
-        {/* Left: Region, Cash, Wanted Stars */}
+        {/* Left: Region, Cash, Radio Head Unit, Wanted Stars */}
         <div className="pointer-events-auto flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 rounded-2xl border border-white/15 bg-slate-950/75 px-3 py-1.5 backdrop-blur-md">
+          <div className="flex items-center gap-2 rounded-2xl border border-white/15 bg-slate-950/80 px-3 py-1.5 backdrop-blur-md shadow">
             <span className="text-xs font-black tracking-wide text-pink-400">
               {activeRegion.areaLabel}
             </span>
@@ -1913,6 +1769,14 @@ export default function GTAIndonesiaGame() {
               ${cash.toLocaleString("id-ID")}
             </span>
           </div>
+
+          {/* Live Jakarta Radio Head Unit (Compact HUD) */}
+          <JakartaRadioHUD
+            channelIndex={radioChannelIndex}
+            onChangeChannelIndex={setRadioChannelIndex}
+            compact
+            muted={muted}
+          />
 
           <div className="flex items-center gap-2">
             {wantedLevel > 0 && (
@@ -1931,15 +1795,32 @@ export default function GTAIndonesiaGame() {
           </div>
         </div>
 
-        {/* Right: Quick Action Buttons & Watermark */}
+        {/* Right: Quick Action Buttons & Clickable Portfolio Watermark */}
         <div className="pointer-events-auto flex flex-col items-end gap-1.5">
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center justify-end gap-1.5">
+            <button
+              onClick={handleTakeScreenshot}
+              className="flex items-center gap-1 rounded-xl border border-cyan-400/50 bg-cyan-500/20 px-2.5 py-1.5 text-xs font-bold text-cyan-200 hover:bg-cyan-500/35 backdrop-blur-md"
+              title="Ambil Foto / Screenshot Jakarta (.PNG)"
+            >
+              <ImageDown className="h-4 w-4" />
+              <span className="hidden md:inline">Screenshot</span>
+            </button>
+
             <button
               onClick={() => setPhoneOpen((p) => !p)}
               className="flex items-center gap-1.5 rounded-xl border border-pink-500/50 bg-gradient-to-r from-pink-600/90 to-orange-500/90 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:brightness-110"
             >
               <Smartphone className="h-4 w-4" />
               <span>HP / GPS</span>
+            </button>
+
+            <button
+              onClick={() => setHowToPlayOpen(true)}
+              className="rounded-xl border border-amber-400/50 bg-amber-500/20 p-2 text-amber-200 hover:bg-amber-500/35 backdrop-blur-md"
+              title="Panduan Main & Fitur"
+            >
+              <HelpCircle className="h-4 w-4" />
             </button>
 
             <button
@@ -1975,46 +1856,65 @@ export default function GTAIndonesiaGame() {
             </button>
           </div>
 
-          {/* Official Watermark */}
-          <div className="rounded-lg bg-black/50 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-300/90 backdrop-blur-sm border border-white/10">
-            GTA Indonesia • Ahmad Alvin Griffin (Vinsky)
+          {/* Clickable Creator Portfolio Watermark */}
+          <div className="rounded-lg bg-slate-950/75 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-slate-300 backdrop-blur-sm border border-white/15 shadow">
+            GTA Indonesia • <CreatorLink />
           </div>
         </div>
       </div>
 
+      {/* Quick Onboarding Tip Banner (Shown once on first city entry) */}
+      {showOnboardingTip && (
+        <div className="fixed bottom-28 sm:bottom-24 left-1/2 z-30 w-[92%] max-w-lg -translate-x-1/2 rounded-2xl border border-cyan-400/50 bg-slate-950/95 p-4 text-xs sm:text-sm text-white shadow-2xl backdrop-blur-md">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-black text-cyan-300">👋 Selamat Datang di Jakarta!</p>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Tekan <kbd className="rounded bg-white/15 px-1">P</kbd> untuk membuka <strong>HP Karakter</strong> (Garasi Avanza/Innova/Mercy/BMW, Live Street View Jakarta, Mini-Games), <kbd className="rounded bg-white/15 px-1">R</kbd> ganti <strong>Radio Jakarta</strong>, <kbd className="rounded bg-white/15 px-1">H</kbd> Klakson Telolet, atau klik ikon <strong>?</strong> untuk panduan lengkap.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowOnboardingTip(false)}
+              className="shrink-0 rounded-xl bg-gradient-to-r from-pink-500 to-orange-500 px-3.5 py-2 text-xs font-black text-white shadow hover:brightness-110"
+            >
+              Mengerti, Gas!
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Center Toast Banner */}
       {toastMsg && (
-        <div className="pointer-events-none fixed top-24 left-1/2 z-30 -translate-x-1/2 rounded-2xl border border-pink-500/40 bg-slate-950/90 px-4 py-2 text-center text-xs sm:text-sm font-bold text-white shadow-2xl backdrop-blur-md">
+        <div className="pointer-events-none fixed top-28 left-1/2 z-30 -translate-x-1/2 rounded-2xl border border-pink-500/40 bg-slate-950/90 px-4 py-2 text-center text-xs sm:text-sm font-bold text-white shadow-2xl backdrop-blur-md">
           {toastMsg}
         </div>
       )}
 
-      {/* Desktop Keyboard Shortcut Guide + Speedometer (Mode Laptop / PC) */}
+      {/* Desktop Keyboard Shortcut Guide + Speedometer */}
       {!resolvedMobile && (
         <>
           <div className="pointer-events-none fixed bottom-4 left-4 z-20 rounded-2xl border border-white/15 bg-slate-950/75 p-3 text-[11px] text-slate-300 backdrop-blur-md space-y-1 max-w-xs">
-            <p className="font-bold text-orange-300">💻 Shortcut Kontrol Laptop / PC</p>
+            <p className="font-bold text-orange-300">💻 Shortcut Laptop / PC</p>
             <p>
-              <kbd className="rounded bg-white/15 px-1">WASD</kbd>/Panah: Jalan/Setir •{" "}
-              <kbd className="rounded bg-white/15 px-1">Space</kbd>: Rem Tangan / Lompat
+              <kbd className="rounded bg-white/15 px-1">WASD</kbd>/Panah: Setir •{" "}
+              <kbd className="rounded bg-white/15 px-1">Space</kbd>: Drift/Lompat •{" "}
+              <kbd className="rounded bg-white/15 px-1">Shift</kbd>: Nitro
             </p>
             <p>
-              <kbd className="rounded bg-white/15 px-1">Shift</kbd>: Nitro / Lari •{" "}
-              <kbd className="rounded bg-white/15 px-1">F</kbd>: Masuk/Keluar Mobil
-            </p>
-            <p>
+              <kbd className="rounded bg-white/15 px-1">F</kbd>: Masuk/Keluar •{" "}
               <kbd className="rounded bg-white/15 px-1">C</kbd>: Kamera ({cameraMode.toUpperCase()}) •{" "}
-              <kbd className="rounded bg-white/15 px-1">H</kbd>: Klakson Telolet
+              <kbd className="rounded bg-white/15 px-1">H</kbd>: Telolet
             </p>
             <p>
-              <kbd className="rounded bg-white/15 px-1">Q/E/Z</kbd>: Sein/Hazard •{" "}
-              <kbd className="rounded bg-white/15 px-1">P</kbd>: HP & Street View •{" "}
+              <kbd className="rounded bg-white/15 px-1">R</kbd>: Radio Jakarta •{" "}
+              <kbd className="rounded bg-white/15 px-1">Q/E/Z</kbd>: Sein •{" "}
+              <kbd className="rounded bg-white/15 px-1">P</kbd>: HP •{" "}
               <kbd className="rounded bg-white/15 px-1">ESC</kbd>: Pause
             </p>
           </div>
 
           {inVehicle && (
-            <div className="pointer-events-none fixed bottom-4 right-4 z-20 flex flex-col items-end gap-2 rounded-2xl border border-white/15 bg-slate-950/80 px-4 py-3 backdrop-blur-md min-w-[190px]">
+            <div className="pointer-events-none fixed bottom-4 right-4 z-20 flex flex-col items-end gap-2 rounded-2xl border border-white/15 bg-slate-950/80 px-4 py-3 backdrop-blur-md min-w-[195px]">
               <div className="flex items-baseline gap-1.5">
                 <span className="font-mono text-3xl font-black text-white">{speedKmh}</span>
                 <span className="text-xs font-bold text-pink-400">KM/H</span>
@@ -2040,10 +1940,9 @@ export default function GTAIndonesiaGame() {
         </>
       )}
 
-      {/* Mobile Touch Controls (Mode HP / Tablet) */}
-      {resolvedMobile && !phoneOpen && !paused && !activeMinigame && (
+      {/* Mobile Touch Controls */}
+      {resolvedMobile && !phoneOpen && !paused && !howToPlayOpen && !activeMinigame && (
         <>
-          {/* Speed pill on mobile */}
           {inVehicle && (
             <div className="pointer-events-none fixed bottom-44 left-1/2 -translate-x-1/2 z-20 rounded-full border border-white/15 bg-slate-950/80 px-4 py-1 text-xs font-mono font-bold text-white backdrop-blur-md">
               {speedKmh} KM/H • NOS {nitroPct}% • BBM {fuelPct}%
@@ -2064,7 +1963,7 @@ export default function GTAIndonesiaGame() {
             />
           </div>
 
-          {/* Right Action & Pedals Cluster */}
+          {/* Right Pedals & Actions */}
           <div className="fixed bottom-5 right-4 z-20 flex flex-col items-end gap-2.5">
             <div className="flex items-center gap-2">
               <button
@@ -2156,7 +2055,7 @@ export default function GTAIndonesiaGame() {
         </>
       )}
 
-      {/* Smartphone HUD Overlay */}
+      {/* Smartphone HUD */}
       <SmartphoneHUD
         isOpen={phoneOpen}
         onClose={() => setPhoneOpen(false)}
@@ -2172,6 +2071,10 @@ export default function GTAIndonesiaGame() {
         timeOfDay={timeOfDay}
         isRaining={isRaining}
         wantedLevel={wantedLevel}
+        radioChannelIndex={radioChannelIndex}
+        muted={muted}
+        onChangeRadioChannel={setRadioChannelIndex}
+        onTakeScreenshot={handleTakeScreenshot}
         onFastTravel={handleFastTravel}
         onSpawnVehicle={(kind) => {
           spawnPlayerVehicle(kind);
@@ -2255,7 +2158,10 @@ export default function GTAIndonesiaGame() {
         />
       )}
 
-      {/* Pause Menu (`ESC`) with Instant Device Switcher */}
+      {/* Panduan Main & Fitur Modal */}
+      <HowToPlayModal isOpen={howToPlayOpen} onClose={() => setHowToPlayOpen(false)} />
+
+      {/* Pause Menu (`ESC`) */}
       {paused && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
           <div className="w-full max-w-md rounded-3xl border border-pink-500/40 bg-slate-950 p-6 shadow-2xl space-y-4">
@@ -2263,12 +2169,11 @@ export default function GTAIndonesiaGame() {
               <h2 className="text-2xl font-black bg-gradient-to-r from-pink-400 to-orange-400 bg-clip-text text-transparent">
                 GAME DIJEDA
               </h2>
-              <p className="text-xs text-slate-400">
-                GTA Indonesia by Ahmad Alvin Griffin (Vinsky)
+              <p className="mt-1 text-xs text-slate-300">
+                GTA Indonesia by <CreatorLink />
               </p>
             </div>
 
-            {/* Quick Toggle HP / Laptop Mode */}
             <div className="rounded-2xl border border-white/10 bg-slate-900 p-3.5 space-y-2">
               <p className="text-xs font-bold uppercase tracking-wider text-cyan-300">
                 Sakelar Cepat Mode Perangkat
@@ -2299,7 +2204,7 @@ export default function GTAIndonesiaGame() {
             {fuelPct <= 10 && (
               <div className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-300">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                Bensin menipis! Kunjungi SPBU atau buka HP &rarr; Dunia.
+                Bensin menipis! Kunjungi SPBU Pertamina atau buka HP &rarr; Dunia.
               </div>
             )}
 
@@ -2313,11 +2218,20 @@ export default function GTAIndonesiaGame() {
               <button
                 onClick={() => {
                   setPaused(false);
+                  setHowToPlayOpen(true);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/15 py-2.5 text-sm font-bold text-amber-200 hover:bg-amber-500/25"
+              >
+                <BookOpen className="h-4 w-4" /> 📖 Panduan Main & Fitur
+              </button>
+              <button
+                onClick={() => {
+                  setPaused(false);
                   setPhoneOpen(true);
                 }}
                 className="w-full rounded-xl bg-slate-800 py-2.5 text-sm font-bold text-white hover:bg-slate-700"
               >
-                Buka Smartphone / Garasi / Street View
+                Buka Smartphone / Garasi / Radio / Street View
               </button>
               <button
                 onClick={() => {

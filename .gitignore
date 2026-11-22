@@ -30,6 +30,9 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# reference screenshots (excluded from git & Vercel deployment)
+/_references/
+
 # vercel
 .vercel
 

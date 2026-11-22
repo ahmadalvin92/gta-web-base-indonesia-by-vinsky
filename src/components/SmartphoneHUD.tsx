@@ -3,7 +3,6 @@
 import React, { useState } from "react";
 import {
   MapPin,
-  ExternalLink,
   Car,
   Gamepad2,
   CloudRain,
@@ -11,21 +10,22 @@ import {
   Sunset,
   Moon,
   X,
-  Navigation,
   Wrench,
   Flame,
   ShieldAlert,
   Fuel,
   Smartphone,
+  Radio,
 } from "lucide-react";
 import {
   JABODETABEK_REGIONS,
   JabodetabekRegion,
   JabodetabekRegionId,
-  latLngToOsmTile,
 } from "@/game/JabodetabekMapFetcher";
 import { VEHICLE_SPECS, VehicleKind } from "@/game/ModelRegistry";
 import { MinigameId } from "./MinigamesModal";
+import { LiveStreetViewPanel } from "./LiveStreetViewPanel";
+import { JakartaRadioHUD } from "./JakartaRadioHUD";
 
 export type TimeOfDay = "morning" | "sunset" | "night";
 
@@ -34,7 +34,7 @@ interface SmartphoneHUDProps {
   onClose: () => void;
   gps: { lat: number; lng: number };
   region: JabodetabekRegion;
-  mapSource: "local-cache" | "openstreetmap-live";
+  mapSource: "local-cache" | "openstreetmap-live" | "jakarta-geojson";
   cash: number;
   currentVehicleKind: VehicleKind;
   paintColor: string;
@@ -44,6 +44,10 @@ interface SmartphoneHUDProps {
   timeOfDay: TimeOfDay;
   isRaining: boolean;
   wantedLevel: number;
+  radioChannelIndex: number;
+  muted: boolean;
+  onChangeRadioChannel: (idx: number) => void;
+  onTakeScreenshot: () => void;
   onFastTravel: (regionId: JabodetabekRegionId) => void;
   onSpawnVehicle: (kind: VehicleKind) => void;
   onChangePaint: (hex: string) => void;
@@ -64,19 +68,14 @@ const PAINT_PALETTE = [
   { name: "Vinsky Pink", hex: "#ff3e9d" },
   { name: "Midnight Blue", hex: "#1d4ed8" },
   { name: "Pearl White", hex: "#f8fafc" },
-  { name: "Stealth Matte", hex: "#1e293b" },
+  { name: "Stealth Black", hex: "#1e293b" },
+  { name: "Silver Metallic", hex: "#cbd5e1" },
+  { name: "Bluebird Sky", hex: "#38bdf8" },
   { name: "JDM Yellow", hex: "#facc15" },
-  { name: "Emerald Green", hex: "#10b981" },
   { name: "Crimson Red", hex: "#e11d48" },
 ];
 
-const RIM_PALETTE = [
-  "#e2e8f0",
-  "#0f172a",
-  "#facc15",
-  "#fb7185",
-  "#38bdf8",
-];
+const RIM_PALETTE = ["#e2e8f0", "#0f172a", "#facc15", "#fb7185", "#38bdf8"];
 
 export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
   isOpen,
@@ -93,6 +92,10 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
   timeOfDay,
   isRaining,
   wantedLevel,
+  radioChannelIndex,
+  muted,
+  onChangeRadioChannel,
+  onTakeScreenshot,
   onFastTravel,
   onSpawnVehicle,
   onChangePaint,
@@ -107,26 +110,27 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
   onQuickRefuelRepair,
   onOpenMinigame,
 }) => {
-  const [tab, setTab] = useState<"gps" | "garage" | "games" | "world">("gps");
+  const [tab, setTab] = useState<"gps" | "garage" | "radio" | "games" | "world">("gps");
   const [plateDraft, setPlateDraft] = useState(plateText);
 
   if (!isOpen) return null;
 
-  const streetViewUrl = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${gps.lat.toFixed(
-    6
-  )},${gps.lng.toFixed(6)}`;
-  const osmTile = latLngToOsmTile(gps.lat, gps.lng, 16);
-
   return (
     <div className="fixed inset-y-0 right-0 z-40 flex items-center justify-end p-2 sm:p-4 pointer-events-none">
-      <div className="pointer-events-auto flex h-[92vh] max-h-[680px] w-[335px] sm:w-[375px] flex-col overflow-hidden rounded-[2.2rem] border-[5px] border-slate-800 bg-slate-950/95 shadow-2xl shadow-pink-500/30 backdrop-blur-xl text-white">
+      <div className="pointer-events-auto flex h-[92vh] max-h-[690px] w-[340px] sm:w-[385px] flex-col overflow-hidden rounded-[2.2rem] border-[5px] border-slate-800 bg-slate-950/95 shadow-2xl shadow-pink-500/30 backdrop-blur-xl text-white">
         {/* Phone Notch & Status Bar */}
         <div className="flex items-center justify-between bg-gradient-to-r from-slate-900 via-purple-950/70 to-slate-900 px-5 py-2.5 border-b border-white/10">
           <div className="flex items-center gap-1.5 text-xs font-bold text-pink-400">
             <Smartphone className="h-3.5 w-3.5" />
             <span>vOS • 5G</span>
           </div>
-          <div className="h-3.5 w-20 rounded-full bg-black/80 border border-white/10" />
+          <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+            {mapSource === "jakarta-geojson"
+              ? "Jakarta GeoJSON"
+              : mapSource === "openstreetmap-live"
+              ? "OSM Live"
+              : "Cache"}
+          </span>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-emerald-400">
               ${cash.toLocaleString("id-ID")}
@@ -142,10 +146,11 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="grid grid-cols-4 gap-1 bg-slate-900/90 p-1.5 border-b border-white/10">
+        <div className="grid grid-cols-5 gap-1 bg-slate-900/90 p-1.5 border-b border-white/10">
           {[
             { id: "gps", label: "GPS", icon: MapPin },
             { id: "garage", label: "Garasi", icon: Car },
+            { id: "radio", label: "Radio", icon: Radio },
             { id: "games", label: "Games", icon: Gamepad2 },
             { id: "world", label: "Dunia", icon: Sun },
           ].map((item) => {
@@ -154,7 +159,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
               <button
                 key={item.id}
                 onClick={() => setTab(item.id as typeof tab)}
-                className={`flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-semibold transition ${
+                className={`flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-semibold transition ${
                   tab === item.id
                     ? "bg-gradient-to-br from-pink-500 to-orange-500 text-white shadow"
                     : "text-slate-400 hover:bg-white/5 hover:text-white"
@@ -171,61 +176,11 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
         <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
           {tab === "gps" && (
             <>
-              <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/80 p-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">
-                    Live GPS Jabodetabek
-                  </span>
-                  <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                    {mapSource === "openstreetmap-live" ? "OSM Live" : "Cache Lokal"}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm font-bold text-white">{region.title}</p>
-                <p className="text-xs font-mono text-slate-300 mt-0.5">
-                  LAT: {gps.lat.toFixed(6)} | LNG: {gps.lng.toFixed(6)}
-                </p>
-
-                {/* Live Free OpenStreetMap 3x3 Tile Minimap */}
-                <div className="relative mt-2.5 h-44 w-full overflow-hidden rounded-xl border border-white/15 bg-slate-800">
-                  <div className="grid grid-cols-3 grid-rows-3 h-full w-full opacity-90">
-                    {[-1, 0, 1].map((dy) =>
-                      [-1, 0, 1].map((dx) => (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={`${dx}_${dy}`}
-                          src={`https://tile.openstreetmap.org/${osmTile.zoom}/${
-                            osmTile.x + dx
-                          }/${osmTile.y + dy}.png`}
-                          alt="OSM Map Tile"
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ))
-                    )}
-                  </div>
-                  {/* Player GPS Pin */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="relative flex h-6 w-6 items-center justify-center">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-pink-500 opacity-75" />
-                      <Navigation className="h-4 w-4 text-pink-500 fill-pink-500 drop-shadow" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Free Google Street View Button (Zero API Key) */}
-                <a
-                  href={streetViewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-3 py-2.5 text-xs font-bold text-white shadow-lg hover:brightness-110 transition"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  Buka Google Street View Asli
-                </a>
-                <p className="mt-1 text-[10px] text-center text-slate-400">
-                  100% Gratis • Membuka panorama nyata di koordinat mobilmu
-                </p>
-              </div>
+              <LiveStreetViewPanel
+                gps={gps}
+                region={region}
+                onTakeScreenshot={onTakeScreenshot}
+              />
 
               {/* Fast Travel */}
               <div className="space-y-1.5">
@@ -292,7 +247,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] text-slate-400 mb-1">Warna Velg</p>
+                    <p className="text-[11px] text-slate-400 mb-1">Warna Velg Alloy</p>
                     <div className="flex gap-1.5">
                       {RIM_PALETTE.map((hex) => (
                         <button
@@ -314,7 +269,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
                         : "border-white/10 bg-slate-800 text-slate-400"
                     }`}
                   >
-                    Neon Kolong: {neonEnabled ? "ON" : "OFF"}
+                    Neon: {neonEnabled ? "ON" : "OFF"}
                   </button>
                 </div>
 
@@ -323,7 +278,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
                     value={plateDraft}
                     onChange={(e) => setPlateDraft(e.target.value.toUpperCase())}
                     maxLength={12}
-                    placeholder="B 1945 VKY"
+                    placeholder="B 1 VKY"
                     className="flex-1 rounded-lg border border-white/15 bg-black/50 px-2.5 py-1.5 text-xs font-mono uppercase text-white outline-none focus:border-pink-500"
                   />
                   <button
@@ -338,7 +293,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
               {/* Vehicle Spawner */}
               <div className="space-y-1.5">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Spawn Kendaraan Instan (10 Unit)
+                  Garasi Mobil Jakarta & CDID ({VEHICLE_SPECS.length} Unit)
                 </p>
                 {VEHICLE_SPECS.map((v) => (
                   <button
@@ -363,6 +318,20 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
                 ))}
               </div>
             </>
+          )}
+
+          {tab === "radio" && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-pink-300">
+                Head Unit Audio • Radio Jakarta Live
+              </p>
+              <JakartaRadioHUD
+                channelIndex={radioChannelIndex}
+                onChangeChannelIndex={onChangeRadioChannel}
+                compact={false}
+                muted={muted}
+              />
+            </div>
           )}
 
           {tab === "games" && (
@@ -407,7 +376,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
             <div className="space-y-3">
               <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-3">
                 <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                  Siklus Waktu & Pencahayaan PBR
+                  Siklus Waktu & Pencahayaan Jakarta
                 </p>
                 <div className="grid grid-cols-3 gap-1.5">
                   <button
@@ -418,7 +387,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
                         : "border-white/10 bg-slate-800 text-slate-400"
                     }`}
                   >
-                    <Sun className="h-4 w-4" /> Pagi
+                    <Sun className="h-4 w-4" /> Siang
                   </button>
                   <button
                     onClick={() => onSetTimeOfDay("sunset")}
@@ -428,7 +397,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
                         : "border-white/10 bg-slate-800 text-slate-400"
                     }`}
                   >
-                    <Sunset className="h-4 w-4" /> Sunset VI
+                    <Sunset className="h-4 w-4" /> Sore
                   </button>
                   <button
                     onClick={() => onSetTimeOfDay("night")}
@@ -481,7 +450,7 @@ export const SmartphoneHUD: React.FC<SmartphoneHUDProps> = ({
                     onClick={() => onAdjustWanted(-5)}
                     className="flex-1 rounded-xl border border-white/15 bg-slate-800 py-2 text-xs font-bold text-slate-300"
                   >
-                    Suap Polisi (Clear)
+                    Clear Polisi
                   </button>
                 </div>
               </div>
