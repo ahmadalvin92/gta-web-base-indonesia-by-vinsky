@@ -3,28 +3,30 @@ import { GLTFLoader, DRACOLoader, SkeletonUtils } from "three-stdlib";
 import { getLicensePlateTexture } from "./IndonesianTextureGenerator";
 
 export type VehicleKind =
-  | "avanza"
-  | "innova"
+  | "supercar"
+  | "lambo"
   | "mercy"
   | "bmw"
+  | "sport"
+  | "innova"
+  | "avanza"
   | "civic"
   | "bluebird"
-  | "supercar"
-  | "sport"
-  | "hatchback"
+  | "police_pjr"
   | "sedan"
   | "suv"
-  | "bus_transjakarta"
-  | "police_pjr"
+  | "hatchback"
   | "angkot"
-  | "motor"
+  | "bus_transjakarta"
   | "jet"
-  | "speedboat";
+  | "heli"
+  | "speedboat"
+  | "motor";
 
 export interface VehicleSpec {
   id: VehicleKind;
   name: string;
-  category: "Mobil Rakyat & CDID" | "Eropa & Sport" | "Dinas & Umum" | "Udara & Laut";
+  category: "Mobil Rakyat & CDID" | "Eropa & Supercar" | "Dinas & Umum" | "Udara & Laut";
   glbPath?: string;
   glbYawOffset?: number;
   defaultColor: string;
@@ -37,218 +39,220 @@ export interface VehicleSpec {
   hasTelolet?: boolean;
   isPolice?: boolean;
   isTaxi?: boolean;
-  targetDims: { length: number; width: number; height: number };
+  targetLength: number;
 }
 
 export const VEHICLE_SPECS: VehicleSpec[] = [
   {
-    id: "avanza",
-    name: "Toyota Avanza / Veloz",
-    category: "Mobil Rakyat & CDID",
-    glbPath: "/models/cars/avanza.glb",
-    glbYawOffset: 0,
-    defaultColor: "#e2e8f0",
-    defaultPlate: "B 2026 VIN",
-    maxSpeedKmh: 195,
-    acceleration: 30,
-    handling: 2.75,
-    targetDims: { length: 4.45, width: 1.84, height: 1.66 },
-  },
-  {
-    id: "innova",
-    name: "Kijang Innova Zenix / Reborn",
-    category: "Mobil Rakyat & CDID",
-    glbPath: "/models/cars/innova.glb",
-    glbYawOffset: 0,
-    defaultColor: "#1e293b",
-    defaultPlate: "B 1089 RFS",
-    maxSpeedKmh: 215,
-    acceleration: 34,
-    handling: 2.68,
-    targetDims: { length: 4.72, width: 1.88, height: 1.72 },
-  },
-  {
-    id: "mercy",
-    name: "Mercedes-Benz C/E-Class",
-    category: "Eropa & Sport",
-    glbPath: "/models/cars/mercy.glb",
-    glbYawOffset: 0,
-    defaultColor: "#cbd5e1",
-    defaultPlate: "B 777 MBY",
-    maxSpeedKmh: 280,
-    acceleration: 44,
-    handling: 3.05,
-    targetDims: { length: 4.65, width: 1.88, height: 1.42 },
-  },
-  {
-    id: "bmw",
-    name: "BMW M4 / 3-Series",
-    category: "Eropa & Sport",
-    glbPath: "/models/cars/bmw.glb",
-    glbYawOffset: 0,
-    defaultColor: "#1d4ed8",
-    defaultPlate: "B 444 BMW",
-    maxSpeedKmh: 305,
-    acceleration: 48,
-    handling: 3.15,
-    targetDims: { length: 4.62, width: 1.9, height: 1.38 },
-  },
-  {
-    id: "civic",
-    name: "Honda Civic Type-R JDM",
-    category: "Mobil Rakyat & CDID",
-    glbPath: "/models/cars/civic.glb",
-    glbYawOffset: 0,
-    defaultColor: "#f8fafc",
-    defaultPlate: "B 1945 JDM",
-    maxSpeedKmh: 278,
-    acceleration: 43,
-    handling: 3.12,
-    targetDims: { length: 4.55, width: 1.88, height: 1.4 },
-  },
-  {
     id: "supercar",
-    name: "Ferrari 458 / Hyperion V12",
-    category: "Eropa & Sport",
+    name: "Ferrari 458 Italia",
+    category: "Eropa & Supercar",
     glbPath: "/models/cars/supercar.glb",
-    glbYawOffset: Math.PI, // Three.js ferrari.glb natively faces -Z
+    glbYawOffset: Math.PI,
     defaultColor: "#dc2626",
     defaultPlate: "B 1 VKY",
     maxSpeedKmh: 355,
     acceleration: 56,
     handling: 3.2,
-    targetDims: { length: 4.55, width: 1.96, height: 1.24 },
+    targetLength: 4.55,
+  },
+  {
+    id: "lambo",
+    name: "Lamborghini Aventador SV",
+    category: "Eropa & Supercar",
+    glbPath: "/models/cars/lambo.glb",
+    defaultColor: "#facc15",
+    defaultPlate: "B 888 VKY",
+    maxSpeedKmh: 365,
+    acceleration: 58,
+    handling: 3.25,
+    targetLength: 4.7,
+  },
+  {
+    id: "mercy",
+    name: "Mercedes-AMG G63 Jakarta",
+    category: "Eropa & Supercar",
+    glbPath: "/models/cars/mercy_g63.glb",
+    defaultColor: "#111827",
+    defaultPlate: "B 777 MBY",
+    maxSpeedKmh: 260,
+    acceleration: 44,
+    handling: 2.85,
+    targetLength: 4.82,
+  },
+  {
+    id: "bmw",
+    name: "BMW M2 Coupe G87",
+    category: "Eropa & Supercar",
+    glbPath: "/models/cars/sedan_real.glb",
+    defaultColor: "#1d4ed8",
+    defaultPlate: "B 444 BMW",
+    maxSpeedKmh: 315,
+    acceleration: 50,
+    handling: 3.18,
+    targetLength: 4.58,
   },
   {
     id: "sport",
-    name: "Griffin GT Coupe",
-    category: "Eropa & Sport",
-    glbPath: "/models/cars/sport.glb",
-    glbYawOffset: 0,
-    defaultColor: "#e11d48",
-    defaultPlate: "B 888 AAG",
+    name: "Sport EV Coupe SU7",
+    category: "Eropa & Supercar",
+    glbPath: "/models/cars/su7.glb",
+    defaultColor: "#06b6d4",
+    defaultPlate: "B 2026 EV",
     maxSpeedKmh: 310,
-    acceleration: 47,
-    handling: 3.05,
-    targetDims: { length: 4.48, width: 1.92, height: 1.32 },
+    acceleration: 52,
+    handling: 3.12,
+    targetLength: 4.85,
+  },
+  {
+    id: "innova",
+    name: "SUV / MPV Luxury Jakarta",
+    category: "Mobil Rakyat & CDID",
+    glbPath: "/models/cars/suv_real.glb",
+    defaultColor: "#1e293b",
+    defaultPlate: "B 1089 RFS",
+    maxSpeedKmh: 225,
+    acceleration: 35,
+    handling: 2.75,
+    targetLength: 4.68,
+  },
+  {
+    id: "avanza",
+    name: "Toyota Avanza / SUV Modern",
+    category: "Mobil Rakyat & CDID",
+    glbPath: "/models/cars/suv_real.glb",
+    defaultColor: "#f8fafc",
+    defaultPlate: "B 2026 VIN",
+    maxSpeedKmh: 195,
+    acceleration: 30,
+    handling: 2.78,
+    targetLength: 4.5,
+  },
+  {
+    id: "civic",
+    name: "JDM Turbo Coupe",
+    category: "Mobil Rakyat & CDID",
+    glbPath: "/models/cars/jdm.glb",
+    defaultColor: "#e11d48",
+    defaultPlate: "B 1945 JDM",
+    maxSpeedKmh: 275,
+    acceleration: 43,
+    handling: 3.1,
+    targetLength: 4.5,
+  },
+  {
+    id: "sedan",
+    name: "Sedan Executive Luxury",
+    category: "Eropa & Supercar",
+    glbPath: "/models/cars/su7.glb",
+    defaultColor: "#0f172a",
+    defaultPlate: "B 1 JKT",
+    maxSpeedKmh: 270,
+    acceleration: 40,
+    handling: 2.85,
+    targetLength: 4.85,
+  },
+  {
+    id: "suv",
+    name: "Urban SUV Compact",
+    category: "Mobil Rakyat & CDID",
+    glbPath: "/models/cars/car_sb.glb",
+    defaultColor: "#334155",
+    defaultPlate: "B 999 VNZ",
+    maxSpeedKmh: 220,
+    acceleration: 34,
+    handling: 2.8,
+    targetLength: 4.55,
   },
   {
     id: "hatchback",
-    name: "JDM Hatchback Modif",
+    name: "Hatchback Street Modif",
     category: "Mobil Rakyat & CDID",
     glbPath: "/models/cars/hatchback.glb",
-    glbYawOffset: 0,
     defaultColor: "#facc15",
     defaultPlate: "B 1212 YRS",
     maxSpeedKmh: 235,
     acceleration: 36,
     handling: 3.2,
-    targetDims: { length: 4.18, width: 1.82, height: 1.46 },
-  },
-  {
-    id: "sedan",
-    name: "Sedan Executive JKT",
-    category: "Mobil Rakyat & CDID",
-    glbPath: "/models/cars/sedan.glb",
-    glbYawOffset: 0,
-    defaultColor: "#0f172a",
-    defaultPlate: "B 2025 IDR",
-    maxSpeedKmh: 265,
-    acceleration: 40,
-    handling: 3.0,
-    targetDims: { length: 4.52, width: 1.88, height: 1.4 },
-  },
-  {
-    id: "suv",
-    name: "SUV Fortuner / Pajero",
-    category: "Mobil Rakyat & CDID",
-    glbPath: "/models/cars/suv.glb",
-    glbYawOffset: 0,
-    defaultColor: "#111827",
-    defaultPlate: "B 999 VNZ",
-    maxSpeedKmh: 225,
-    acceleration: 33,
-    handling: 2.6,
-    targetDims: { length: 4.78, width: 1.92, height: 1.74 },
+    targetLength: 4.2,
   },
   {
     id: "bluebird",
     name: "Taksi Bluebird Jakarta",
     category: "Dinas & Umum",
-    glbPath: "/models/cars/bluebird.glb",
-    glbYawOffset: 0,
-    defaultColor: "#38bdf8",
+    glbPath: "/models/cars/su7.glb",
+    defaultColor: "#0284c7",
     defaultPlate: "B 2889 DR",
     maxSpeedKmh: 195,
     acceleration: 30,
-    handling: 2.8,
+    handling: 2.82,
     isTaxi: true,
-    targetDims: { length: 4.45, width: 1.82, height: 1.54 },
-  },
-  {
-    id: "bus_transjakarta",
-    name: "Bus TransJakarta Telolet",
-    category: "Dinas & Umum",
-    glbPath: "/models/cars/transjakarta.glb",
-    glbYawOffset: 0,
-    defaultColor: "#0284c7",
-    defaultPlate: "B 7123 TJ",
-    maxSpeedKmh: 145,
-    acceleration: 20,
-    handling: 1.9,
-    hasTelolet: true,
-    targetDims: { length: 9.8, width: 2.45, height: 3.05 },
+    targetLength: 4.8,
   },
   {
     id: "police_pjr",
     name: "Mobil Polisi PJR Korlantas",
     category: "Dinas & Umum",
     glbPath: "/models/cars/police.glb",
-    glbYawOffset: 0,
     defaultColor: "#ffffff",
     defaultPlate: "VII 1204-00",
     maxSpeedKmh: 275,
     acceleration: 44,
     handling: 2.95,
     isPolice: true,
-    targetDims: { length: 4.55, width: 1.9, height: 1.44 },
+    targetLength: 4.55,
+  },
+  {
+    id: "bus_transjakarta",
+    name: "Bus TransJakarta Telolet",
+    category: "Dinas & Umum",
+    glbPath: "/models/cars/transjakarta.glb",
+    defaultColor: "#0284c7",
+    defaultPlate: "B 7123 TJ",
+    maxSpeedKmh: 145,
+    acceleration: 20,
+    handling: 1.9,
+    hasTelolet: true,
+    targetLength: 9.8,
   },
   {
     id: "angkot",
     name: "Angkot Mikrolet Biru",
     category: "Dinas & Umum",
     glbPath: "/models/cars/angkot.glb",
-    glbYawOffset: 0,
     defaultColor: "#06b6d4",
     defaultPlate: "B 1452 WK",
     maxSpeedKmh: 155,
     acceleration: 24,
     handling: 2.45,
     hasTelolet: true,
-    targetDims: { length: 4.18, width: 1.78, height: 1.82 },
-  },
-  {
-    id: "motor",
-    name: "Motor Sport / Skuter JKT",
-    category: "Dinas & Umum",
-    defaultColor: "#111827",
-    defaultPlate: "B 4510 VKY",
-    maxSpeedKmh: 175,
-    acceleration: 42,
-    handling: 3.5,
-    targetDims: { length: 2.05, width: 0.78, height: 1.15 },
+    targetLength: 4.2,
   },
   {
     id: "jet",
-    name: "Jet Eksekutif Nusantara",
+    name: "Pesawat Nusantara Air",
     category: "Udara & Laut",
+    glbPath: "/models/cars/airplane.glb",
     defaultColor: "#e2e8f0",
     defaultPlate: "PK-VKY",
     maxSpeedKmh: 520,
     acceleration: 68,
     handling: 2.2,
     isAircraft: true,
-    targetDims: { length: 9.6, width: 8.8, height: 2.8 },
+    targetLength: 8.8,
+  },
+  {
+    id: "heli",
+    name: "Helikopter Polisi / Vinsky",
+    category: "Udara & Laut",
+    glbPath: "/models/cars/heli.glb",
+    defaultColor: "#1e293b",
+    defaultPlate: "PK-HLI",
+    maxSpeedKmh: 360,
+    acceleration: 50,
+    handling: 2.7,
+    isAircraft: true,
+    targetLength: 7.4,
   },
   {
     id: "speedboat",
@@ -260,39 +264,31 @@ export const VEHICLE_SPECS: VehicleSpec[] = [
     acceleration: 35,
     handling: 2.6,
     isBoat: true,
-    targetDims: { length: 6.2, width: 2.2, height: 1.35 },
+    targetLength: 6.2,
+  },
+  {
+    id: "motor",
+    name: "Motor Sport Jakarta",
+    category: "Dinas & Umum",
+    defaultColor: "#111827",
+    defaultPlate: "B 4510 VKY",
+    maxSpeedKmh: 175,
+    acceleration: 42,
+    handling: 3.5,
+    targetLength: 2.05,
   },
 ];
 
 export const CITY_ASSET_FILES = [
-  "predio_alto.glb",
-  "predio_apartamentos.glb",
-  "escritorio.glb",
-  "hotel.glb",
-  "banco.glb",
-  "shopping.glb",
-  "mercado.glb",
-  "restaurante.glb",
-  "loja_esquina.glb",
-  "oficina.glb",
-  "posto_recarga.glb",
-  "policia.glb",
-  "hospital.glb",
-  "monumento.glb",
   "ponto_onibus.glb",
   "semaforo.glb",
   "poste_luz.glb",
   "ponte.glb",
   "buriti.glb",
   "ipe_amarelo.glb",
-  "building-small-a.glb",
-  "building-small-b.glb",
-  "building-small-c.glb",
-  "building-small-d.glb",
-  "building-garage.glb",
-  "pavement-fountain.glb",
-  "grass-trees.glb",
   "grass-trees-tall.glb",
+  "pavement-fountain.glb",
+  "posto_recarga.glb",
 ];
 
 interface CachedGLTFData {
@@ -302,40 +298,48 @@ interface CachedGLTFData {
 
 let sharedGLTFLoader: GLTFLoader | null = null;
 const gltfCache = new Map<string, CachedGLTFData>();
+const inflightLoads = new Map<string, Promise<CachedGLTFData | null>>();
 
 function getGLTFLoader(): GLTFLoader {
   if (!sharedGLTFLoader) {
     sharedGLTFLoader = new GLTFLoader();
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath(
-      "https://www.gstatic.com/draco/versioned/decoders/1.5.7/"
-    );
+    dracoLoader.setDecoderPath("/draco/");
     sharedGLTFLoader.setDRACOLoader(dracoLoader);
   }
   return sharedGLTFLoader;
 }
 
-async function loadGLTFUrl(url: string): Promise<CachedGLTFData | null> {
+export async function loadGLTFUrl(url: string): Promise<CachedGLTFData | null> {
   if (gltfCache.has(url)) return gltfCache.get(url)!;
-  try {
-    const loader = getGLTFLoader();
-    const gltf = await loader.loadAsync(url);
-    gltf.scene.traverse((child) => {
-      if ((child as THREE.Mesh).isMesh) {
-        const m = child as THREE.Mesh;
-        m.castShadow = true;
-        m.receiveShadow = true;
-      }
-    });
-    const entry: CachedGLTFData = {
-      scene: gltf.scene,
-      animations: gltf.animations || [],
-    };
-    gltfCache.set(url, entry);
-    return entry;
-  } catch {
-    return null;
-  }
+  if (inflightLoads.has(url)) return inflightLoads.get(url)!;
+
+  const p = (async () => {
+    try {
+      const loader = getGLTFLoader();
+      const gltf = await loader.loadAsync(url);
+      gltf.scene.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const m = child as THREE.Mesh;
+          m.castShadow = true;
+          m.receiveShadow = true;
+        }
+      });
+      const entry: CachedGLTFData = {
+        scene: gltf.scene,
+        animations: gltf.animations || [],
+      };
+      gltfCache.set(url, entry);
+      return entry;
+    } catch {
+      return null;
+    } finally {
+      inflightLoads.delete(url);
+    }
+  })();
+
+  inflightLoads.set(url, p);
+  return p;
 }
 
 export function getCachedCityAsset(filename: string): THREE.Group | null {
@@ -345,18 +349,31 @@ export function getCachedCityAsset(filename: string): THREE.Group | null {
 }
 
 /**
- * Preloads all real 3D .GLB assets (characters, vehicles, city buildings, trees & props)
- * so every 3D object in GTA Indonesia renders immediately with real .glb meshes.
+ * Preloads core characters, starting high-poly car, lightweight Jakarta traffic cars, and street props
+ * quickly (< 2s), while heavier optional showroom GLBs can load cleanly on demand.
  */
 export async function preloadAllGameModels(
+  startVehicleKind: VehicleKind,
   onProgress?: (pct: number, label: string) => void
 ): Promise<void> {
   const urls = new Set<string>();
   urls.add("/models/characters/Soldier.glb");
   urls.add("/models/characters/Michelle.glb");
-  for (const spec of VEHICLE_SPECS) {
-    if (spec.glbPath) urls.add(spec.glbPath);
-  }
+
+  const startSpec = VEHICLE_SPECS.find((s) => s.id === startVehicleKind);
+  if (startSpec?.glbPath) urls.add(startSpec.glbPath);
+
+  // Core traffic & iconic Jakarta vehicles (real high-poly automotive GLBs!)
+  [
+    "/models/cars/supercar.glb",
+    "/models/cars/lambo.glb",
+    "/models/cars/sedan_real.glb",
+    "/models/cars/su7.glb",
+    "/models/cars/mercy_g63.glb",
+    "/models/cars/police.glb",
+    "/models/cars/transjakarta.glb",
+  ].forEach((u) => urls.add(u));
+
   for (const file of CITY_ASSET_FILES) {
     urls.add(`/models/city/${file}`);
   }
@@ -373,11 +390,22 @@ export async function preloadAllGameModels(
         loaded++;
         const pct = Math.round((loaded / list.length) * 100);
         if (onProgress) {
-          onProgress(pct, `Memuat model 3D nyata (${loaded}/${list.length}): ${url.split("/").pop()}`);
+          onProgress(
+            pct,
+            `Memuat aset 3D (${loaded}/${list.length}): ${url.split("/").pop()}`
+          );
         }
       })
     );
   }
+}
+
+export async function ensureVehicleModelLoaded(kind: VehicleKind): Promise<boolean> {
+  const spec = VEHICLE_SPECS.find((s) => s.id === kind);
+  if (!spec?.glbPath) return true;
+  if (gltfCache.has(spec.glbPath)) return true;
+  const res = await loadGLTFUrl(spec.glbPath);
+  return Boolean(res);
 }
 
 export interface CabinFitResult {
@@ -388,31 +416,62 @@ export interface CabinFitResult {
   hoodCamOffset: THREE.Vector3;
 }
 
+/**
+ * Automatically orients any loaded 3D vehicle so its longest axis is +Z forward,
+ * verifies front vs rear wheel orientation, uniformly scales to realistic targetLength (without squishing!),
+ * and centers X/Z while grounding bottom at y = 0.
+ */
 export function autoScaleAndFitCabin(
   model: THREE.Object3D,
   targetLength = 4.5,
-  targetWidth = 1.9,
-  targetHeight = 1.4
+  explicitYawOffset?: number
 ): CabinFitResult {
   model.updateMatrixWorld(true);
+
+  if (explicitYawOffset !== undefined) {
+    model.rotation.y += explicitYawOffset;
+    model.updateMatrixWorld(true);
+  } else {
+    // Check raw bounds: if X > Z * 1.15, rotate 90 deg so longest axis is Z
+    const b0 = new THREE.Box3().setFromObject(model);
+    const s0 = new THREE.Vector3();
+    b0.getSize(s0);
+    if (s0.x > s0.z * 1.15) {
+      model.rotation.y += Math.PI / 2;
+      model.updateMatrixWorld(true);
+    }
+
+    // Verify front wheel Z vs center so headlights face +Z forward
+    const cBox = new THREE.Box3().setFromObject(model);
+    const cCenter = new THREE.Vector3();
+    cBox.getCenter(cCenter);
+
+    let frontZSum = 0;
+    let frontCount = 0;
+    model.traverse((obj) => {
+      if (/front/i.test(obj.name) && /wheel|tire/i.test(obj.name)) {
+        const wBox = new THREE.Box3().setFromObject(obj);
+        if (!wBox.isEmpty()) {
+          const wc = new THREE.Vector3();
+          wBox.getCenter(wc);
+          frontZSum += wc.z - cCenter.z;
+          frontCount++;
+        }
+      }
+    });
+    if (frontCount > 0 && frontZSum / frontCount < -0.1) {
+      model.rotation.y += Math.PI;
+      model.updateMatrixWorld(true);
+    }
+  }
+
   const rawBox = new THREE.Box3().setFromObject(model);
   const rawSize = new THREE.Vector3();
   rawBox.getSize(rawSize);
 
-  const safeX = Math.max(rawSize.x, 0.01);
-  const safeY = Math.max(rawSize.y, 0.01);
-  const safeZ = Math.max(rawSize.z, 0.01);
-
-  const scaleX = targetWidth / safeX;
-  const scaleZ = targetLength / safeZ;
-  const scaleY = targetHeight / safeY;
-  const uniformScale = (scaleX + scaleZ) * 0.5;
-
-  model.scale.set(
-    uniformScale,
-    Math.min(Math.max(scaleY, uniformScale * 0.8), uniformScale * 1.25),
-    uniformScale
-  );
+  // Uniform scale preserves exact real-world car proportions (never squished/stretched!)
+  const uniformScale = targetLength / Math.max(rawSize.z, 0.01);
+  model.scale.multiplyScalar(uniformScale);
   model.updateMatrixWorld(true);
 
   const scaledBox = new THREE.Box3().setFromObject(model);
@@ -493,11 +552,7 @@ export function createVehicleMesh(
 
   if (cachedGLB) {
     const glbClone = cachedGLB.scene.clone(true);
-    if (spec.glbYawOffset) {
-      glbClone.rotation.y = spec.glbYawOffset;
-    }
 
-    // Clone materials per vehicle instance so paint/rim customization does not mutate shared cache
     glbClone.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const m = child as THREE.Mesh;
@@ -506,16 +561,21 @@ export function createVehicleMesh(
 
         const cloneMat = (mat: THREE.Material) => {
           const cloned = mat.clone() as THREE.MeshStandardMaterial;
+          if ("envMapIntensity" in cloned) {
+            cloned.envMapIntensity = 1.45;
+          }
           const mName = (cloned.name || "").toLowerCase();
           if (
-            mName.includes("body") ||
-            mName.includes("car") ||
-            mName.includes("paint") ||
-            mName.includes("parede")
+            (mName.includes("body") ||
+              mName.includes("carpaint") ||
+              mName.includes("paint") ||
+              mName.includes("car_body") ||
+              mName.includes("parede")) &&
+            !mName.includes("black")
           ) {
             paintableMats.push(cloned);
           }
-          if (mName.includes("metal") || mName.includes("rim")) {
+          if (mName.includes("metal") || mName.includes("rim") || mName.includes("alloy")) {
             rimMats.push(cloned);
           }
           return cloned;
@@ -528,54 +588,49 @@ export function createVehicleMesh(
         }
       }
 
-      if (/wheel/i.test(child.name) && !/steering/i.test(child.name)) {
+      if (
+        /wheel/i.test(child.name) &&
+        !/steering/i.test(child.name) &&
+        !(child as THREE.SkinnedMesh).isSkinnedMesh &&
+        child.position.lengthSq() > 0.05
+      ) {
         wheels.push(child);
       }
     });
 
-    if (options?.paintColor && paintableMats.length > 0) {
+    if (
+      (options?.paintColor || spec.isTaxi || kind === "sedan") &&
+      paintableMats.length > 0
+    ) {
       paintableMats.forEach((pm) => pm.color.set(paintHex));
     }
 
     modelBody.add(glbClone);
   } else {
-    // Clean fallback only for Motor / Jet / Speedboat
+    // Clean fallback for Speedboat / Motor or not-yet-cached showroom car
     const paintMat = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color(paintHex),
-      metalness: 0.72,
-      roughness: 0.22,
+      metalness: 0.78,
+      roughness: 0.18,
       clearcoat: 1.0,
+      envMapIntensity: 1.5,
     });
     paintableMats.push(paintMat);
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.7 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.65 });
     const glassMat = new THREE.MeshPhysicalMaterial({
       color: 0x0b1628,
       transparent: true,
       opacity: 0.45,
+      clearcoat: 1.0,
     });
 
-    if (kind === "jet") {
-      const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.65, 8.8, 16), paintMat);
-      fus.rotation.x = Math.PI / 2;
-      fus.position.y = 1.35;
-      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1.8, 16), paintMat);
-      nose.rotation.x = Math.PI / 2;
-      nose.position.set(0, 1.35, 5.3);
-      const wing = new THREE.Mesh(new THREE.BoxGeometry(8.8, 0.14, 1.8), paintMat);
-      wing.position.set(0, 1.15, 0.2);
-      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.8, 1.4), darkMat);
-      tail.position.set(0, 2.4, -3.7);
-      const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.6, 1.9), glassMat);
-      canopy.position.set(0, 1.95, 2.4);
-      modelBody.add(fus, nose, wing, tail, canopy);
-    } else if (kind === "speedboat") {
+    if (kind === "speedboat") {
       const hull = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.65, 5.8), paintMat);
       hull.position.y = 0.42;
       const shield = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.42, 2.0), glassMat);
       shield.position.set(0, 0.85, 0.2);
       modelBody.add(hull, shield);
-    } else {
-      // Motor
+    } else if (kind === "motor") {
       const frame = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.55, 1.75), paintMat);
       frame.position.y = 0.56;
       const bar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 0.1), darkMat);
@@ -588,42 +643,37 @@ export function createVehicleMesh(
         modelBody.add(t);
         wheels.push(t);
       });
+    } else {
+      // Temporary smooth placeholder while heavy showroom GLB finishes downloading
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.72, 4.4), paintMat);
+      body.position.y = 0.68;
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.56, 0.52, 2.1), glassMat);
+      cab.position.set(0, 1.24, -0.15);
+      modelBody.add(body, cab);
     }
   }
 
   const cabinFit = autoScaleAndFitCabin(
     modelBody,
-    spec.targetDims.length,
-    spec.targetDims.width,
-    spec.targetDims.height
+    spec.targetLength,
+    spec.glbYawOffset
   );
 
   const halfL = cabinFit.dimensions.z / 2;
   const width = cabinFit.dimensions.x;
   const height = cabinFit.dimensions.y;
 
-  // Indonesian White License Plates (front & rear) attached to scaled vehicle bounds
+  // Indonesian White License Plates (front & rear)
   let plateTexture = getLicensePlateTexture(plateStr, true);
   const plateMat = new THREE.MeshStandardMaterial({ map: plateTexture, roughness: 0.35 });
-  if (kind !== "jet" && kind !== "speedboat" && kind !== "motor") {
-    const fPlate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.03), plateMat);
-    fPlate.position.set(0, 0.36, halfL + 0.02);
-    const rPlate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.14, 0.03), plateMat);
+  if (!spec.isAircraft && !spec.isBoat && kind !== "motor") {
+    const fPlate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.13, 0.03), plateMat);
+    fPlate.position.set(0, 0.34, halfL + 0.02);
+    const rPlate = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.13, 0.03), plateMat);
     rPlate.position.set(0, 0.44, -halfL - 0.02);
     root.add(fPlate, rPlate);
   }
 
-  // Headlight, Brake & Turn Signal LED Strips
-  const hlMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    emissive: new THREE.Color(0xe0f2fe),
-    emissiveIntensity: 1.4,
-  });
-  const tlMat = new THREE.MeshStandardMaterial({
-    color: 0xef4444,
-    emissive: new THREE.Color(0xdc2626),
-    emissiveIntensity: 1.0,
-  });
   const leftSigMat = new THREE.MeshStandardMaterial({
     color: 0xf59e0b,
     emissive: new THREE.Color(0xf59e0b),
@@ -635,26 +685,23 @@ export function createVehicleMesh(
     emissiveIntensity: 0,
   });
 
-  if (kind !== "jet" && kind !== "motor") {
-    [-width * 0.33, width * 0.33].forEach((lx) => {
-      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.04), hlMat);
-      hl.position.set(lx, height * 0.42, halfL + 0.01);
-      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.09, 0.04), tlMat);
-      tl.position.set(lx, height * 0.46, -halfL - 0.01);
-      root.add(hl, tl);
+  const lsF = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.03), leftSigMat);
+  const lsR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.03), leftSigMat);
+  const rsF = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.03), rightSigMat);
+  const rsR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.03), rightSigMat);
+  const signalMeshes = [lsF, lsR, rsF, rsR];
+
+  if (!spec.isAircraft && kind !== "motor") {
+    lsF.position.set(-width * 0.36, height * 0.36, halfL - 0.02);
+    lsR.position.set(-width * 0.36, height * 0.42, -halfL + 0.02);
+    rsF.position.set(width * 0.36, height * 0.36, halfL - 0.02);
+    rsR.position.set(width * 0.36, height * 0.42, -halfL + 0.02);
+    signalMeshes.forEach((sm) => {
+      sm.visible = false;
+      root.add(sm);
     });
-    const lsF = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), leftSigMat);
-    lsF.position.set(-width * 0.44, height * 0.42, halfL + 0.01);
-    const lsR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), leftSigMat);
-    lsR.position.set(-width * 0.44, height * 0.46, -halfL - 0.01);
-    const rsF = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), rightSigMat);
-    rsF.position.set(width * 0.44, height * 0.42, halfL + 0.01);
-    const rsR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), rightSigMat);
-    rsR.position.set(width * 0.44, height * 0.46, -halfL - 0.01);
-    root.add(lsF, lsR, rsF, rsR);
   }
 
-  // Police PJR Red/Blue Strobe Bar
   let sirenRed: THREE.Mesh | undefined;
   let sirenBlue: THREE.Mesh | undefined;
   if (spec.isPolice) {
@@ -663,23 +710,22 @@ export function createVehicleMesh(
       new THREE.MeshStandardMaterial({
         color: 0xff0022,
         emissive: new THREE.Color(0xff0022),
-        emissiveIntensity: 2.4,
+        emissiveIntensity: 2.5,
       })
     );
-    sirenRed.position.set(-0.28, height + 0.06, -0.05);
+    sirenRed.position.set(-0.28, height + 0.04, -0.05);
     sirenBlue = new THREE.Mesh(
       new THREE.BoxGeometry(0.46, 0.12, 0.22),
       new THREE.MeshStandardMaterial({
         color: 0x0066ff,
         emissive: new THREE.Color(0x0066ff),
-        emissiveIntensity: 2.4,
+        emissiveIntensity: 2.5,
       })
     );
-    sirenBlue.position.set(0.28, height + 0.06, -0.05);
+    sirenBlue.position.set(0.28, height + 0.04, -0.05);
     root.add(sirenRed, sirenBlue);
   }
 
-  // Neon Underglow
   const neonMat = new THREE.MeshBasicMaterial({
     color: new THREE.Color(neonHex),
     transparent: true,
@@ -687,11 +733,11 @@ export function createVehicleMesh(
     side: THREE.DoubleSide,
   });
   const neonMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(width * 1.15, spec.targetDims.length * 0.92),
+    new THREE.PlaneGeometry(width * 1.12, spec.targetLength * 0.92),
     neonMat
   );
   neonMesh.rotation.x = -Math.PI / 2;
-  neonMesh.position.y = 0.035;
+  neonMesh.position.y = 0.04;
   root.add(neonMesh);
 
   return {
@@ -718,21 +764,16 @@ export function createVehicleMesh(
       if (hex) neonMat.color.set(hex);
       neonMat.opacity = enabled ? 0.52 : 0.0;
     },
-    setLightsState: ({
-      headlightsOn,
-      braking,
-      leftTurn,
-      rightTurn,
-      hazard,
-      timeSec,
-      policeActive,
-    }) => {
-      hlMat.emissiveIntensity = headlightsOn ? 2.4 : 0.45;
-      tlMat.emissiveIntensity = braking ? 3.5 : headlightsOn ? 1.2 : 0.3;
-
+    setLightsState: ({ leftTurn, rightTurn, hazard, timeSec, policeActive }) => {
       const blink = Math.sin(timeSec * 8) > 0;
-      leftSigMat.emissiveIntensity = (leftTurn || hazard) && blink ? 3.2 : 0.0;
-      rightSigMat.emissiveIntensity = (rightTurn || hazard) && blink ? 3.2 : 0.0;
+      const leftOn = (leftTurn || hazard) && blink;
+      const rightOn = (rightTurn || hazard) && blink;
+      leftSigMat.emissiveIntensity = leftOn ? 3.2 : 0.0;
+      rightSigMat.emissiveIntensity = rightOn ? 3.2 : 0.0;
+      lsF.visible = leftOn;
+      lsR.visible = leftOn;
+      rsF.visible = rightOn;
+      rsR.visible = rightOn;
 
       if (sirenRed && sirenBlue) {
         const phase = Math.sin(timeSec * 14) > 0;
@@ -778,10 +819,6 @@ export interface CharacterInstance {
   dispose: () => void;
 }
 
-/**
- * Rigged Skeletal-Animated 3D Human Character (Soldier.glb with Idle, Walk, Run AnimationClips)
- * cloned safely via SkeletonUtils.clone.
- */
 export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInstance {
   const group = new THREE.Group();
   const soldierCache = gltfCache.get("/models/characters/Soldier.glb");
@@ -804,7 +841,7 @@ export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInsta
 
   if (soldierCache) {
     const model = SkeletonUtils.clone(soldierCache.scene) as THREE.Group;
-    model.rotation.y = Math.PI; // Soldier.glb natively faces -Z -> rotate to +Z forward
+    model.rotation.y = Math.PI;
     model.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const m = child as THREE.Mesh;
@@ -836,7 +873,6 @@ export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInsta
       currentAction = idleAction;
     }
   } else {
-    // Fallback minimal articulated character if GLB wasn't cached yet
     const body = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.24, 0.9, 6, 10),
       new THREE.MeshStandardMaterial({ color: opts?.tintHex ?? 0x2563eb })
@@ -860,7 +896,6 @@ export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInsta
     setSittingInCabin: (sitting: boolean) => {
       isSitting = sitting;
       if (sitting) {
-        // Hide/compact inside tinted cabin so driver head never clips through roof
         group.visible = false;
         weaponMesh.visible = false;
       } else {
@@ -880,11 +915,7 @@ export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInsta
         mixer.update(dt);
       }
 
-      if (isSwimming) {
-        group.rotation.x = 0.45 + Math.sin(timeSec * 5) * 0.08;
-      } else {
-        group.rotation.x = 0;
-      }
+      group.rotation.x = isSwimming ? 0.45 + Math.sin(timeSec * 5) * 0.08 : 0;
     },
     dispose: () => {
       mixer?.stopAllAction();
@@ -903,9 +934,6 @@ export function createCharacterMesh(opts?: { tintHex?: string }): CharacterInsta
   };
 }
 
-/**
- * Animated Michelle.glb dancer for Bundaran HI plaza atmosphere.
- */
 export function createPlazaDancerMesh(): {
   group: THREE.Group;
   update: (dt: number) => void;
@@ -939,8 +967,7 @@ export function createPlazaDancerMesh(): {
       mixer?.stopAllAction();
       group.traverse((obj) => {
         if ((obj as THREE.Mesh).isMesh) {
-          const m = obj as THREE.Mesh;
-          m.geometry.dispose();
+          (obj as THREE.Mesh).geometry.dispose();
         }
       });
     },

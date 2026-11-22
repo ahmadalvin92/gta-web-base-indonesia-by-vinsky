@@ -4,11 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "GTA Indonesia by Ahmad Alvin Griffin (Vinsky)",
   description:
-    "Game 3D Open-World Ultra-Realistic berlatar peta Jabodetabek nyata (OpenStreetMap), fisika mengemudi CDID, klakson telolet, Google Street View gratis, dan portal mini-games — karya Ahmad Alvin Griffin (Vinsky).",
+    "Game 3D Open-World berlatar kota Jakarta & Jabodetabek nyata (OpenStreetMap), mobil high-poly realistis, klakson telolet, Live Street View gratis, dan Radio Jakarta — karya Ahmad Alvin Griffin (Vinsky).",
   openGraph: {
     title: "GTA Indonesia by Ahmad Alvin Griffin (Vinsky)",
     description:
-      "Jelajahi Bundaran HI, SCBD, PIK, BSD, Sentul & Bekasi dalam game web 3D Open-World 100% gratis untuk HP & Laptop.",
+      "Jelajahi Bundaran HI, Sudirman–SCBD, Semanggi, Pondok Indah, PIK, BSD & Sentul dalam game 3D Open-World gratis untuk HP & Laptop.",
     type: "website",
     locale: "id_ID",
   },
@@ -29,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id">
-      <body className="bg-[#07080f] text-white antialiased overflow-hidden">
+      <body className="bg-[#07080f] text-white antialiased">
         {children}
       </body>
     </html>

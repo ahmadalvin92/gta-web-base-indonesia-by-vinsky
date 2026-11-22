@@ -378,13 +378,13 @@ export function getTollSignTexture(label: string): THREE.CanvasTexture {
   ctx.fillText("JASA MARGA", 92, 47);
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 30px sans-serif";
+  ctx.font = "bold 24px sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText(label, 28, 108);
+  ctx.fillText(label, 24, 110, 365);
 
-  ctx.font = "bold 40px sans-serif";
+  ctx.font = "bold 32px sans-serif";
   ctx.textAlign = "right";
-  ctx.fillText("⬇  ⬇", 476, 112);
+  ctx.fillText("⬇  ⬇", 482, 112);
 
   return registerTexture(key, canvas);
 }

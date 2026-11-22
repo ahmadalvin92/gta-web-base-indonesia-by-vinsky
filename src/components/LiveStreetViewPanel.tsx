@@ -124,7 +124,7 @@ export const LiveStreetViewPanel: React.FC<LiveStreetViewPanelProps> = ({
               </div>
             </div>
           ) : (
-            <div className="relative h-36 w-full overflow-hidden">
+            <div className="relative h-36 w-full overflow-hidden bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:14px_14px] bg-slate-900">
               <div className="grid grid-cols-3 grid-rows-3 h-full w-full">
                 {[-1, 0, 1].map((dy) =>
                   [-1, 0, 1].map((dx) => (
@@ -135,6 +135,9 @@ export const LiveStreetViewPanel: React.FC<LiveStreetViewPanelProps> = ({
                         osmTile.x + dx
                       }/${osmTile.y + dy}.png`}
                       alt="OpenStreetMap Live"
+                      onError={(e) => {
+                        e.currentTarget.style.opacity = "0";
+                      }}
                       className="h-full w-full object-cover"
                     />
                   ))
